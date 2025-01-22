@@ -1,0 +1,2 @@
+1. Format and use C:\WINDOWS\System32\cmd.exe for shell commands.
+2. For supabase commands, use the following format: `npx supabase <command> <arguments>`.
