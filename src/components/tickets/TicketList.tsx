@@ -21,6 +21,7 @@ import {
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
 import { TicketDetails } from './TicketDetails'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 interface Ticket {
   id: string
@@ -49,7 +50,67 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
 
   useEffect(() => {
     fetchTickets()
+    
+    // Set up real-time subscription
+    const channel = setupTicketSubscription()
+    
+    return () => {
+      channel.unsubscribe()
+    }
   }, [userRole])
+
+  function setupTicketSubscription(): RealtimeChannel {
+    const channel = supabase
+      .channel('tickets-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets'
+        },
+        async (payload) => {
+          console.log('Real-time update:', payload)
+          
+          // Refresh the tickets list when changes occur
+          if (payload.eventType === 'INSERT') {
+            // For inserts, fetch just the new ticket and add it to the list
+            const { data: newTicket, error } = await supabase
+              .from('tickets')
+              .select(`
+                id,
+                title,
+                description,
+                status,
+                priority,
+                created_at,
+                customer_id,
+                assigned_to,
+                customer:profiles!tickets_customer_id_fkey (
+                  id,
+                  full_name
+                ),
+                assignee:profiles!tickets_assigned_to_fkey (
+                  id,
+                  full_name
+                )
+              `)
+              .eq('id', payload.new.id)
+              .single()
+
+            if (!error && newTicket) {
+              setTickets(current => [newTicket, ...current])
+            }
+          } else {
+            // For updates and deletes, refresh the entire list
+            fetchTickets()
+          }
+        }
+      )
+      .subscribe()
+
+    return channel
+  }
 
   async function fetchTickets() {
     try {
@@ -176,6 +237,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         <Table variant="simple">
           <Thead>
             <Tr>
+              <Th>ID</Th>
               <Th>Title</Th>
               <Th>Status</Th>
               <Th>Priority</Th>
@@ -187,6 +249,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
           <Tbody>
             {tickets.map(ticket => (
               <Tr key={ticket.id}>
+                <Td>#{ticket.id.slice(0, 8)}</Td>
                 <Td>{ticket.title}</Td>
                 <Td>
                   {userRole === 'customer' ? (

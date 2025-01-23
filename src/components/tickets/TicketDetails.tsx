@@ -9,9 +9,21 @@ import {
   Divider,
   Select,
   useToast,
+  Button,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  useDisclosure,
+  IconButton,
 } from '@chakra-ui/react';
+import { FiEdit2 } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
 import TicketChat from '../../components/TicketChat';
+import { EditTicket } from './EditTicket';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 interface Ticket {
   id: string;
@@ -37,10 +49,18 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
     fetchTicketDetails();
     getCurrentUser();
+
+    // Set up real-time subscription
+    const channel = setupTicketSubscription();
+    
+    return () => {
+      channel.unsubscribe();
+    }
   }, [ticketId]);
 
   async function getCurrentUser() {
@@ -91,6 +111,38 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     }
   }
 
+  function setupTicketSubscription(): RealtimeChannel {
+    const channel = supabase
+      .channel(`ticket-${ticketId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets',
+          filter: `id=eq.${ticketId}`
+        },
+        async (payload) => {
+          console.log('Real-time ticket update:', payload);
+          
+          if (payload.eventType === 'UPDATE') {
+            // Update the ticket state with the new data
+            setTicket(current => current ? { ...current, ...payload.new } : null);
+          } else if (payload.eventType === 'DELETE') {
+            // Handle ticket deletion - maybe show a message and close the detail view
+            toast({
+              title: 'Ticket has been deleted',
+              status: 'warning',
+              duration: 3000,
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return channel;
+  }
+
   async function updateTicketStatus(newStatus: string) {
     try {
       const { error } = await supabase
@@ -117,6 +169,58 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     }
   }
 
+  async function handleCustomerCloseTicket() {
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ status: 'closed' })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+
+      setTicket(ticket => ticket ? { ...ticket, status: 'closed' } : null);
+
+      toast({
+        title: 'Ticket closed successfully',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error closing ticket:', error);
+      toast({
+        title: 'Error closing ticket',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
+  async function updateTicketPriority(newPriority: string) {
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ priority: newPriority })
+        .eq('id', ticketId);
+
+      if (error) throw error;
+
+      setTicket(ticket => ticket ? { ...ticket, priority: newPriority } : null);
+
+      toast({
+        title: 'Priority updated successfully',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error updating priority:', error);
+      toast({
+        title: 'Error updating priority',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
   function getPriorityColor(priority: string) {
     switch (priority) {
       case 'urgent': return 'red';
@@ -131,20 +235,50 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     return <Box p={6}>Loading ticket details...</Box>;
   }
 
+  const canEdit = userRole === 'customer' && currentUserId === ticket.customer.id;
+
   return (
     <Box height="100%" display="flex" flexDirection="column" overflow="hidden">
       {/* Fixed Header */}
       <Box p={6} bg="white" borderBottom="1px" borderColor="gray.200">
-        <Heading size="lg" mb={2}>{ticket.title}</Heading>
-        <Text color="gray.600" mb={4}>{ticket.description}</Text>
+        <HStack justify="space-between" align="flex-start" mb={2}>
+          <Box flex="1">
+            <HStack>
+              <Heading size="lg">{ticket.title}</Heading>
+              {canEdit && (
+                <IconButton
+                  icon={<FiEdit2 />}
+                  aria-label="Edit ticket"
+                  size="sm"
+                  colorScheme="blue"
+                  variant="ghost"
+                  onClick={onOpen}
+                />
+              )}
+            </HStack>
+            <Text color="gray.600" mt={2}>{ticket.description}</Text>
+          </Box>
+        </HStack>
         
-        <HStack spacing={4} mb={4}>
+        <HStack spacing={4} mb={4} mt={4}>
           <HStack>
             <Text fontWeight="bold">Status:</Text>
             {userRole === 'customer' ? (
-              <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
-                {ticket.status}
-              </Badge>
+              <HStack>
+                <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
+                  {ticket.status}
+                </Badge>
+                {ticket.status !== 'closed' && canEdit && (
+                  <Button
+                    size="xs"
+                    colorScheme="red"
+                    variant="outline"
+                    onClick={handleCustomerCloseTicket}
+                  >
+                    Close Ticket
+                  </Button>
+                )}
+              </HStack>
             ) : (
               <Select
                 value={ticket.status}
@@ -162,9 +296,23 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           
           <HStack>
             <Text fontWeight="bold">Priority:</Text>
-            <Badge colorScheme={getPriorityColor(ticket.priority)}>
-              {ticket.priority}
-            </Badge>
+            {userRole === 'customer' ? (
+              <Badge colorScheme={getPriorityColor(ticket.priority)}>
+                {ticket.priority}
+              </Badge>
+            ) : (
+              <Select
+                value={ticket.priority}
+                onChange={(e) => updateTicketPriority(e.target.value)}
+                size="sm"
+                width="150px"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </Select>
+            )}
           </HStack>
           
           <HStack>
@@ -195,6 +343,22 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           />
         </Box>
       </Box>
+
+      {/* Edit Ticket Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent maxW="800px">
+          <ModalHeader>Edit Ticket</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <EditTicket
+              ticket={ticket}
+              onClose={onClose}
+              onUpdate={fetchTicketDetails}
+            />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 } 

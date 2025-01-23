@@ -72,6 +72,10 @@ create policy "Support and admin can update assigned tickets"
   using (auth.uid() = assigned_to or 
         exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
 
+create policy "Customers can update their own tickets"
+  on tickets for update
+  using (auth.uid() = customer_id);
+
 -- Create policies for ticket messages
 create policy "Users can view messages of accessible tickets"
   on ticket_messages for select
@@ -95,5 +99,6 @@ create policy "Users can create messages for accessible tickets"
 
 -- Enable realtime for ticket messages
 drop publication if exists supabase_realtime;
-create publication supabase_realtime for table ticket_messages;
-alter table ticket_messages replica identity full; 
+create publication supabase_realtime for table ticket_messages, tickets;
+alter table ticket_messages replica identity full;
+alter table tickets replica identity full; 
