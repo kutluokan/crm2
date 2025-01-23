@@ -63,7 +63,38 @@ export function Auth() {
     }
   }
 
-  return (
+  const handleAnonymousCustomerSignIn = async () => {
+    try {
+      const randomId = Math.random().toString(36).substring(2)
+      const email = `anonymous_customer_${randomId}@temp.com`
+      const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            role: 'customer'
+          }
+        }
+      })
+
+      if (error) throw error
+      console.log('Anonymous customer sign in successful:', data)
+      
+      sessionStorage.setItem('anonymousCustomerCredentials', JSON.stringify({ email, password }))
+      
+    } catch (error) {
+      console.error('Error signing in anonymously as customer:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to sign in anonymously as customer. Please try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
     <Box bg="white" p={8} rounded="lg" shadow="base">
       <VStack spacing={6}>
         <Heading size="lg" textAlign="center">Welcome to CRM</Heading>
@@ -75,6 +106,15 @@ export function Auth() {
           size="lg"
         >
           Continue as Admin (Anonymous)
+        </Button>
+        
+        <Button 
+          colorScheme="green" 
+          width="100%" 
+          onClick={handleAnonymousCustomerSignIn}
+          size="lg"
+        >
+          Continue as Customer (Anonymous)
         </Button>
         
         <Divider />
