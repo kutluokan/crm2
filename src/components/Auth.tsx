@@ -95,6 +95,7 @@ export function Auth() {
       })
     }
   }
+  return (
     <Box bg="white" p={8} rounded="lg" shadow="base">
       <VStack spacing={6}>
         <Heading size="lg" textAlign="center">Welcome to CRM</Heading>
