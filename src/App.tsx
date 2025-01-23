@@ -6,6 +6,7 @@ import { AdminDashboard } from './components/AdminDashboard'
 import { CustomerDashboard } from './components/CustomerDashboard'
 import { SupportDashboard } from './components/SupportDashboard'
 import { UserManagement } from './components/admin/UserManagement'
+import { TicketList } from './components/tickets/TicketList'
 import { supabase } from './lib/supabase'
 import { Session } from '@supabase/supabase-js'
 
@@ -149,7 +150,7 @@ export default function App() {
           <Route path="/" element={
             profile?.role === 'admin' ? <Navigate to="/admin/users" /> :
             profile?.role === 'customer' ? <Navigate to="/customer" /> :
-            profile?.role === 'support' ? <Navigate to="/support" /> :
+            profile?.role === 'support' ? <Navigate to="/support/tickets" /> :
             <Navigate to="/" />
           } />
           
@@ -163,10 +164,16 @@ export default function App() {
 
           <Route path="/support" element={
             profile?.role === 'support' ? <SupportDashboard /> : <Navigate to="/" />
-          } />
+          }>
+            <Route path="tickets" element={<TicketList userRole="support" />} />
+            <Route index element={<Navigate to="tickets" replace />} />
+          </Route>
+
           <Route path="/customer" element={
             profile?.role === 'customer' ? <CustomerDashboard /> : <Navigate to="/" />
           } />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>
     </Router>

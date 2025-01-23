@@ -16,6 +16,18 @@ import {
 import { useState, useEffect } from 'react'
 import { supabase, supabaseAdmin } from '../../lib/supabase'
 
+interface Profile {
+  id: string
+  role: string
+  full_name: string | null
+  created_at: string
+}
+
+interface AuthUser {
+  id: string
+  email: string
+}
+
 interface User {
   id: string
   email: string
@@ -39,30 +51,34 @@ export function UserManagement() {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, role, full_name, created_at')
-        .order('created_at', { ascending: false });
-
-      console.log('Profiles from database:', profiles);
+        .order('created_at', { ascending: false })
+        .returns<Profile[]>();
 
       if (profilesError) throw profilesError;
 
       // Then get all users using rpc
       const { data: authUsers, error: usersError } = await supabase
-        .rpc('get_users', {});
-
-      console.log('Auth users from database:', authUsers);
+        .rpc('get_users', {})
+        .returns<AuthUser[]>();
 
       if (usersError) throw usersError;
+      if (!profiles || !authUsers) return;
 
       // Combine the data
-      const usersMap = new Map(authUsers.map(user => [user.id, user.email]));
+      const usersMap = new Map(authUsers.map((user: AuthUser) => [user.id, user.email]));
       
-      const mappedUsers = profiles.map(profile => ({
-        ...profile,
-        email: usersMap.get(profile.id) || 'N/A',
-        full_name: profile.full_name
-      }));
-
-      console.log('Final mapped users:', mappedUsers);
+      const mappedUsers = profiles.map((profile) => {
+        const email = usersMap.get(profile.id);
+        if (!email) return null;
+        
+        return {
+          id: profile.id,
+          email: email,
+          role: profile.role,
+          created_at: profile.created_at,
+          full_name: profile.full_name
+        } as User;
+      }).filter((user): user is User => user !== null);
       
       setUsers(mappedUsers);
     } catch (error) {

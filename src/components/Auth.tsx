@@ -33,57 +33,20 @@ export function Auth() {
     sessionStorage.clear()
   }, [])
 
-  const handleAnonymousSignIn = async () => {
+  const handleAdminSignIn = async () => {
     try {
-      console.log('Starting anonymous admin sign in...')
-      
-      // Generate a random email and password for anonymous users
-      const randomId = Math.random().toString(36).substring(2)
-      const email = `anonymous_admin_${randomId}@temp.com`
-      const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
-      const displayName = `Anonymous Admin ${randomId.substring(0, 4)}`
-      
-      console.log('Generated credentials:', { email })
-      
-      // First sign up the user
-      console.log('Attempting to sign up...')
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            role: 'admin',
-            full_name: displayName
-          }
-        }
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'adam.admin@example.com',
+        password: 'password123'
       })
 
-      if (signUpError) {
-        console.error('Sign up error:', signUpError)
-        throw signUpError
-      }
-
-      if (!signUpData.user) {
-        throw new Error('No user data returned after signup')
-      }
-
-      // Wait a moment for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Then sign in with the credentials
-      console.log('Attempting to sign in...')
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
-
-      if (signInError) throw signInError
+      if (error) throw error
       
     } catch (error: any) {
-      console.error('Error signing in anonymously:', error)
+      console.error('Error signing in as admin:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to sign in anonymously',
+        description: error.message || 'Failed to sign in as admin',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -91,40 +54,20 @@ export function Auth() {
     }
   }
 
-  const handleAnonymousCustomerSignIn = async () => {
+  const handleCustomerSignIn = async () => {
     try {
-      const randomId = Math.random().toString(36).substring(2)
-      const email = `anonymous_customer_${randomId}@temp.com`
-      const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
-      const displayName = `Anonymous Customer ${randomId.substring(0, 4)}`
-      
-      // First sign up the user
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            role: 'customer',
-            full_name: displayName
-          }
-        }
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'christina.customer@example.com',
+        password: 'password123'
       })
 
-      if (signUpError) throw signUpError
+      if (error) throw error
       
-      // Then sign in with the credentials
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
-
-      if (signInError) throw signInError
-      
-    } catch (error) {
-      console.error('Error signing in anonymously as customer:', error)
+    } catch (error: any) {
+      console.error('Error signing in as customer:', error)
       toast({
         title: 'Error',
-        description: 'Failed to sign in anonymously as customer. Please try again.',
+        description: error.message || 'Failed to sign in as customer',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -132,40 +75,20 @@ export function Auth() {
     }
   }
 
-  const handleAnonymousSupportSignIn = async () => {
+  const handleSupportSignIn = async () => {
     try {
-      const randomId = Math.random().toString(36).substring(2)
-      const email = `anonymous_support_${randomId}@temp.com`
-      const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
-      const displayName = `Anonymous Support ${randomId.substring(0, 4)}`
-      
-      // First sign up the user
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            role: 'support',
-            full_name: displayName
-          }
-        }
+      const { error } = await supabase.auth.signInWithPassword({
+        email: 'sarah.support@example.com',
+        password: 'password123'
       })
 
-      if (signUpError) throw signUpError
+      if (error) throw error
       
-      // Then sign in with the credentials
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
-
-      if (signInError) throw signInError
-      
-    } catch (error) {
-      console.error('Error signing in anonymously as support:', error)
+    } catch (error: any) {
+      console.error('Error signing in as support:', error)
       toast({
         title: 'Error',
-        description: 'Failed to sign in anonymously as support. Please try again.',
+        description: error.message || 'Failed to sign in as support',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -181,7 +104,7 @@ export function Auth() {
         <Button 
           colorScheme="blue" 
           width="100%" 
-          onClick={handleAnonymousSignIn}
+          onClick={handleAdminSignIn}
           size="lg"
         >
           Continue as Admin
@@ -190,7 +113,7 @@ export function Auth() {
         <Button 
           colorScheme="purple" 
           width="100%" 
-          onClick={handleAnonymousSupportSignIn}
+          onClick={handleSupportSignIn}
           size="lg"
         >
           Continue as Support
@@ -199,7 +122,7 @@ export function Auth() {
         <Button 
           colorScheme="green" 
           width="100%" 
-          onClick={handleAnonymousCustomerSignIn}
+          onClick={handleCustomerSignIn}
           size="lg"
         >
           Continue as Customer

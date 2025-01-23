@@ -1,7 +1,9 @@
-import { Box, Container, Heading, Button, HStack, Text, Flex } from '@chakra-ui/react'
+import { Box, Container, Heading, Button, HStack, Text, Flex, Tabs, TabList, TabPanels, Tab, TabPanel } from '@chakra-ui/react'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from './Sidebar'
-import { FiHelpCircle } from 'react-icons/fi'
+import { FiHelpCircle, FiPlusCircle, FiList } from 'react-icons/fi'
+import { CreateTicket } from './tickets/CreateTicket'
+import { TicketList } from './tickets/TicketList'
 
 const sidebarItems = [
   { label: 'Help & Support', path: '/customer/help', icon: FiHelpCircle },
@@ -38,8 +40,22 @@ export function CustomerDashboard() {
             </Button>
           </HStack>
 
-          <Box bg="white" rounded="lg" shadow="base" p={6}>
-            <Text>Welcome to your customer dashboard. Here you can view your tickets and get support.</Text>
+          <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
+            <Tabs>
+              <TabList px={6} pt={4}>
+                <Tab><HStack><FiList /><Text>My Tickets</Text></HStack></Tab>
+                <Tab><HStack><FiPlusCircle /><Text>Create Ticket</Text></HStack></Tab>
+              </TabList>
+
+              <TabPanels>
+                <TabPanel>
+                  <TicketList userRole="customer" />
+                </TabPanel>
+                <TabPanel>
+                  <CreateTicket />
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
           </Box>
         </Container>
       </Box>

@@ -17,9 +17,15 @@ import {
   Flex,
 } from '@chakra-ui/react'
 import { supabase, supabaseAdmin } from '../lib/supabase'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiUsers, FiInbox } from 'react-icons/fi'
+import { TicketList } from './tickets/TicketList'
+
+interface AuthUser {
+  id: string
+  email: string
+}
 
 interface User {
   id: string
@@ -34,6 +40,10 @@ const sidebarItems = [
 ]
 
 export function AdminDashboard() {
+  const location = useLocation()
+  const isTicketsPath = location.pathname.includes('/tickets')
+  const isUsersPath = location.pathname.includes('/users')
+
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const toast = useToast()
@@ -59,7 +69,7 @@ export function AdminDashboard() {
       if (usersError) throw usersError;
 
       // Combine the data
-      const usersMap = new Map(authUsers.map(user => [user.id, user.email]));
+      const usersMap = new Map(authUsers.map((user: AuthUser) => [user.id, user.email]));
       
       setUsers(profiles.map(profile => ({
         ...profile,
@@ -178,7 +188,13 @@ export function AdminDashboard() {
           </HStack>
 
           <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
-            <Outlet />
+            {isTicketsPath ? (
+              <TicketList userRole="admin" />
+            ) : isUsersPath ? (
+              <Outlet />
+            ) : (
+              <Navigate to="users" replace />
+            )}
           </Box>
         </Container>
       </Box>

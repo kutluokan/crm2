@@ -1,7 +1,8 @@
-import { Box, Container, Heading, Button, HStack, Text, Flex } from '@chakra-ui/react'
+import { Box, Container, Heading, Button, HStack, Flex } from '@chakra-ui/react'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from './Sidebar'
 import { FiInbox } from 'react-icons/fi'
+import { Outlet, useLocation } from 'react-router-dom'
 
 const sidebarItems = [
   { label: 'Tickets', path: '/support/tickets', icon: FiInbox },
@@ -38,8 +39,8 @@ export function SupportDashboard() {
             </Button>
           </HStack>
 
-          <Box bg="white" rounded="lg" shadow="base" p={6}>
-            <Text>Welcome to the support dashboard. Here you can manage customer tickets and respond to support requests.</Text>
+          <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
+            <Outlet />
           </Box>
         </Container>
       </Box>
