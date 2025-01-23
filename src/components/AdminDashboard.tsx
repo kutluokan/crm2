@@ -1,12 +1,9 @@
 import {
   Box,
   Heading,
-  Button,
   useToast,
-  HStack,
   Flex,
 } from '@chakra-ui/react'
-import { supabase } from '../lib/supabase'
 import { useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiUsers, FiInbox, FiBarChart2 } from 'react-icons/fi'
@@ -22,37 +19,9 @@ const sidebarItems = [
 
 export function AdminDashboard() {
   const location = useLocation()
-  const navigate = useNavigate()
-  const toast = useToast()
   const isTicketsPath = location.pathname.includes('/tickets')
   const isUsersPath = location.pathname.includes('/users')
   const isPerformancePath = location.pathname.includes('/performance')
-
-  async function handleSignOut() {
-    try {
-      // Clear state first
-      sessionStorage.clear()
-      localStorage.clear()
-
-      // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-
-      // Finally navigate
-      navigate('/', { replace: true })
-    } catch (error: any) {
-      console.error('Error signing out:', error)
-      toast({
-        title: 'Error signing out',
-        description: error.message || 'An error occurred while signing out',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      })
-      // Force navigation to home on error
-      navigate('/', { replace: true })
-    }
-  }
 
   return (
     <Flex h="100vh" overflow="hidden">
@@ -76,12 +45,7 @@ export function AdminDashboard() {
         }}
       >
         <Box p={8} maxW="100%" mx="auto">
-          <HStack justify="space-between" mb={8} flexWrap="wrap" gap={4}>
-            <Heading size="lg">Admin Dashboard</Heading>
-            <Button onClick={handleSignOut} colorScheme="red" variant="outline">
-              Sign Out
-            </Button>
-          </HStack>
+          <Heading size="lg" mb={8}>Admin Dashboard</Heading>
 
           <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
             {isTicketsPath ? (
