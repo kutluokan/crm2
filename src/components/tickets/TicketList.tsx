@@ -18,6 +18,10 @@ import {
   ModalCloseButton,
   ModalBody,
   useDisclosure,
+  HStack,
+  VStack,
+  FormControl,
+  FormLabel,
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
 import { TicketDetails } from './TicketDetails'
@@ -31,25 +35,42 @@ interface Ticket {
   priority: string
   created_at: string
   customer: {
+    id: string
     email: string
     full_name: string
   }
   assigned_to: string
+  assignee?: {
+    id: string
+    full_name: string
+  }
 }
 
 interface TicketListProps {
   userRole: 'admin' | 'support' | 'customer'
 }
 
+type SortField = 'created_at' | 'priority' | 'status'
+type SortOrder = 'asc' | 'desc'
+
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<SortField>('created_at')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [filterCustomer, setFilterCustomer] = useState<string>('')
+  const [filterSupport, setFilterSupport] = useState<string>('')
+  const [customers, setCustomers] = useState<Array<{ id: string; full_name: string }>>([])
+  const [supportStaff, setSupportStaff] = useState<Array<{ id: string; full_name: string }>>([])
   const { isOpen, onOpen, onClose } = useDisclosure()
   const toast = useToast()
 
   useEffect(() => {
     fetchTickets()
+    if (userRole === 'admin') {
+      fetchUsers()
+    }
     
     // Set up real-time subscription
     const channel = setupTicketSubscription()
@@ -57,7 +78,30 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     return () => {
       channel.unsubscribe()
     }
-  }, [userRole])
+  }, [userRole, sortField, sortOrder, filterCustomer, filterSupport])
+
+  async function fetchUsers() {
+    try {
+      // Fetch customers
+      const { data: customerData } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('role', 'customer')
+        .order('full_name')
+
+      // Fetch support staff
+      const { data: supportData } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('role', 'support')
+        .order('full_name')
+
+      if (customerData) setCustomers(customerData)
+      if (supportData) setSupportStaff(supportData)
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    }
+  }
 
   function setupTicketSubscription(): RealtimeChannel {
     const channel = supabase
@@ -137,15 +181,21 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
             full_name
           )
         `)
-        .order('created_at', { ascending: false })
+        .order(sortField, { ascending: sortOrder === 'asc' })
 
-      // Filter based on role
+      // Apply filters based on role and selected filters
       if (userRole === 'customer') {
         query = query.eq('customer_id', user.id)
       } else if (userRole === 'support') {
         query = query.eq('assigned_to', user.id)
+      } else if (userRole === 'admin') {
+        if (filterCustomer) {
+          query = query.eq('customer_id', filterCustomer)
+        }
+        if (filterSupport) {
+          query = query.eq('assigned_to', filterSupport)
+        }
       }
-      // Admin sees all tickets
 
       const { data, error } = await query
 
@@ -165,10 +215,15 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
       const transformedTickets = (data || []).map(ticket => ({
         ...ticket,
         customer: {
+          id: ticket.customer_id,
           email: emailMap.get(ticket.customer_id) || 'N/A',
           full_name: ticket.customer?.full_name || 'N/A'
         },
-        assigned_to: ticket.assigned_to
+        assigned_to: ticket.assigned_to,
+        assignee: ticket.assignee ? {
+          id: ticket.assignee.id,
+          full_name: ticket.assignee.full_name
+        } : undefined
       }))
 
       setTickets(transformedTickets)
@@ -233,6 +288,68 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
 
   return (
     <>
+      {(userRole === 'admin' || userRole === 'support') && (
+        <Box p={4} bg="white" shadow="sm" mb={4}>
+          <VStack spacing={4} align="stretch">
+            <HStack spacing={4}>
+              <FormControl>
+                <FormLabel>Sort by</FormLabel>
+                <Select
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value as SortField)}
+                >
+                  <option value="created_at">Date</option>
+                  <option value="priority">Priority</option>
+                  <option value="status">Status</option>
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Order</FormLabel>
+                <Select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </Select>
+              </FormControl>
+            </HStack>
+            {userRole === 'admin' && (
+              <HStack spacing={4}>
+                <FormControl>
+                  <FormLabel>Filter by Customer</FormLabel>
+                  <Select
+                    value={filterCustomer}
+                    onChange={(e) => setFilterCustomer(e.target.value)}
+                    placeholder="All Customers"
+                  >
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.full_name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Filter by Support Staff</FormLabel>
+                  <Select
+                    value={filterSupport}
+                    onChange={(e) => setFilterSupport(e.target.value)}
+                    placeholder="All Support Staff"
+                  >
+                    {supportStaff.map(staff => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.full_name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
+              </HStack>
+            )}
+          </VStack>
+        </Box>
+      )}
+
       <Box overflowX="auto">
         <Table variant="simple">
           <Thead>
@@ -242,6 +359,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
               <Th>Status</Th>
               <Th>Priority</Th>
               {userRole !== 'customer' && <Th>Customer</Th>}
+              {userRole === 'admin' && <Th>Assigned To</Th>}
               <Th>Created</Th>
               <Th>Actions</Th>
             </Tr>
@@ -277,6 +395,9 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                 </Td>
                 {userRole !== 'customer' && (
                   <Td>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
+                )}
+                {userRole === 'admin' && (
+                  <Td>{ticket.assignee?.full_name || 'Unassigned'}</Td>
                 )}
                 <Td>{new Date(ticket.created_at).toLocaleDateString()}</Td>
                 <Td>

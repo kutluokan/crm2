@@ -37,7 +37,7 @@
   - [x] View all tickets
 
 #### Advanced Ticket Features
-- [ ] Internal notes system
+- [x] Internal notes system
 - [ ] Custom fields
 - [ ] Tagging system
 - [ ] File attachments
