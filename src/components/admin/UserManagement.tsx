@@ -15,6 +15,7 @@ import {
 } from '@chakra-ui/react'
 import { useState, useEffect } from 'react'
 import { supabase, supabaseAdmin } from '../../lib/supabase'
+import { useNavigate } from 'react-router-dom'
 
 interface Profile {
   id: string
@@ -40,6 +41,7 @@ export function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const toast = useToast()
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchUsers()
@@ -50,37 +52,24 @@ export function UserManagement() {
       // First get all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, role, full_name, created_at')
-        .order('created_at', { ascending: false })
-        .returns<Profile[]>();
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
 
       // Then get all users using rpc
       const { data: authUsers, error: usersError } = await supabase
-        .rpc('get_users', {})
-        .returns<AuthUser[]>();
+        .rpc('get_users', {});
 
       if (usersError) throw usersError;
-      if (!profiles || !authUsers) return;
 
       // Combine the data
       const usersMap = new Map(authUsers.map((user: AuthUser) => [user.id, user.email]));
       
-      const mappedUsers = profiles.map((profile) => {
-        const email = usersMap.get(profile.id);
-        if (!email) return null;
-        
-        return {
-          id: profile.id,
-          email: email,
-          role: profile.role,
-          created_at: profile.created_at,
-          full_name: profile.full_name
-        } as User;
-      }).filter((user): user is User => user !== null);
-      
-      setUsers(mappedUsers);
+      setUsers(profiles.map(profile => ({
+        ...profile,
+        email: usersMap.get(profile.id) || 'N/A'
+      })));
     } catch (error) {
       console.error('Error fetching users:', error)
       toast({
@@ -99,7 +88,18 @@ export function UserManagement() {
       const { data: { user } } = await supabase.auth.getUser();
       const currentUserId = user?.id;
 
-      // First delete the profile
+      // First delete all tickets associated with the user
+      const { error: ticketsError } = await supabaseAdmin
+        .from('tickets')
+        .delete()
+        .or(`customer_id.eq.${userId},assigned_to.eq.${userId}`);
+
+      if (ticketsError) {
+        console.error('Error deleting tickets:', ticketsError);
+        throw ticketsError;
+      }
+
+      // Then delete the profile
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .delete()
@@ -107,7 +107,7 @@ export function UserManagement() {
 
       if (profileError) throw profileError;
 
-      // Then delete the user
+      // Finally delete the user
       const { error: userError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
       if (userError) throw userError;
@@ -116,19 +116,20 @@ export function UserManagement() {
 
       toast({
         title: 'User deleted successfully',
+        description: 'User and all associated data have been removed',
         status: 'success',
         duration: 2000,
       });
 
       // If the deleted user is the current user, sign out
       if (currentUserId === userId) {
-        window.location.href = '/'
+        navigate('/')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting user:', error);
       toast({
         title: 'Error deleting user',
-        description: 'Make sure you have admin privileges.',
+        description: error.message || 'Make sure you have admin privileges and the user has no active tickets.',
         status: 'error',
         duration: 3000,
       });
@@ -163,54 +164,52 @@ export function UserManagement() {
     }
   }
 
+  if (loading) {
+    return <Text p={6}>Loading users...</Text>
+  }
+
   return (
     <Box p={6}>
-      <Heading size="md" mb={4}>User Management</Heading>
-      {loading ? (
-        <Text>Loading users...</Text>
-      ) : (
-        <Table variant="simple">
-          <Thead>
-            <Tr>
-              <Th>Email</Th>
-              <Th>Display Name</Th>
-              <Th>Role</Th>
-              <Th>Created At</Th>
-              <Th>Actions</Th>
+      <Table variant="simple">
+        <Thead>
+          <Tr>
+            <Th>Email</Th>
+            <Th>Display Name</Th>
+            <Th>Role</Th>
+            <Th>Created At</Th>
+            <Th>Actions</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {users.map(user => (
+            <Tr key={user.id}>
+              <Td>{user.email}</Td>
+              <Td>{user.full_name || 'N/A'}</Td>
+              <Td>
+                <Select
+                  value={user.role}
+                  onChange={(e) => updateUserRole(user.id, e.target.value)}
+                  maxW="200px"
+                >
+                  <option value="customer">Customer</option>
+                  <option value="support">Support</option>
+                  <option value="admin">Admin</option>
+                </Select>
+              </Td>
+              <Td>{new Date(user.created_at).toLocaleDateString()}</Td>
+              <Td>
+                <Button
+                  colorScheme="red"
+                  size="sm"
+                  onClick={() => deleteUser(user.id)}
+                >
+                  Delete
+                </Button>
+              </Td>
             </Tr>
-          </Thead>
-          <Tbody>
-            {users.map(user => (
-              <Tr key={user.id}>
-                <Td>{user.email}</Td>
-                <Td>{user.full_name || 'N/A'}</Td>
-                <Td>{user.role}</Td>
-                <Td>{new Date(user.created_at).toLocaleDateString()}</Td>
-                <Td>
-                  <Select
-                    value={user.role}
-                    onChange={(e) => updateUserRole(user.id, e.target.value)}
-                    maxW="200px"
-                  >
-                    <option value="customer">Customer</option>
-                    <option value="support">Support</option>
-                    <option value="admin">Admin</option>
-                  </Select>
-                </Td>
-                <Td>
-                  <Button
-                    colorScheme="red"
-                    size="sm"
-                    onClick={() => deleteUser(user.id)}
-                  >
-                    Delete
-                  </Button>
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      )}
+          ))}
+        </Tbody>
+      </Table>
     </Box>
   )
 } 

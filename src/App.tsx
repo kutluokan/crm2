@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { Box, Container, Spinner, Center } from '@chakra-ui/react'
 import { Auth } from './components/Auth'
 import { AdminDashboard } from './components/AdminDashboard'
@@ -21,60 +21,14 @@ interface UserProfile {
   updated_at: string
 }
 
-export default function App() {
+function AppContent() {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Clear any existing sessions on mount
-    sessionStorage.clear()
-    localStorage.clear()
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session?.user) {
-        getProfile(session.user.id)
-      } else {
-        setLoading(false)
-      }
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email)
-      
-      if (event === 'SIGNED_OUT') {
-        setSession(null)
-        setProfile(null)
-        setLoading(false)
-        // Clear any stored state
-        sessionStorage.clear()
-        localStorage.clear()
-      } else if (event === 'SIGNED_IN' && session) {
-        setSession(session)
-        await getProfile(session.user.id)
-      } else {
-        setSession(session)
-        if (session?.user) {
-          await getProfile(session.user.id)
-        } else {
-          setProfile(null)
-          setLoading(false)
-        }
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
-      // Clear state on unmount
-      setSession(null)
-      setProfile(null)
-    }
-  }, [])
+  const navigate = useNavigate()
 
   async function getProfile(userId: string) {
+    console.log('Fetching profile for user:', userId)
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -84,40 +38,103 @@ export default function App() {
 
       if (error) {
         console.error('Error fetching profile:', error)
-        // If profile doesn't exist or there's an error, sign out the user
-        await supabase.auth.signOut()
-        sessionStorage.clear()
-        localStorage.clear()
-        setSession(null)
-        setProfile(null)
-        setLoading(false)
+        await handleSignOut()
         return
       }
 
       if (data) {
+        console.log('Profile fetched successfully:', data.role)
         setProfile(data)
       } else {
-        // If no profile data, sign out
-        await supabase.auth.signOut()
-        sessionStorage.clear()
-        localStorage.clear()
-        setSession(null)
-        setProfile(null)
+        console.log('No profile found')
+        await handleSignOut()
       }
     } catch (error) {
       console.error('Error:', error)
-      // On any error, clear everything
-      await supabase.auth.signOut()
-      sessionStorage.clear()
-      localStorage.clear()
+      await handleSignOut()
+    }
+  }
+
+  async function handleSignOut() {
+    console.log('Signing out...')
+    try {
       setSession(null)
       setProfile(null)
+      sessionStorage.clear()
+      localStorage.clear()
+      await supabase.auth.signOut()
+      navigate('/', { replace: true })
+    } catch (error) {
+      console.error('Error signing out:', error)
+      setSession(null)
+      setProfile(null)
+      sessionStorage.clear()
+      localStorage.clear()
+      navigate('/', { replace: true })
     } finally {
       setLoading(false)
     }
   }
 
+  useEffect(() => {
+    let mounted = true
+
+    async function initializeSession() {
+      try {
+        console.log('Initializing session...')
+        const { data: { session: initialSession } } = await supabase.auth.getSession()
+        
+        if (!mounted) return
+
+        if (initialSession?.user) {
+          console.log('Initial session found for:', initialSession.user.email)
+          setSession(initialSession)
+          await getProfile(initialSession.user.id)
+        } else {
+          console.log('No initial session found')
+          setSession(null)
+          setProfile(null)
+        }
+      } catch (error) {
+        console.error('Error initializing session:', error)
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    // Initialize session
+    initializeSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      console.log('Auth state changed:', event, currentSession?.user?.email)
+      
+      if (!mounted) return
+
+      if (event === 'SIGNED_OUT') {
+        console.log('User signed out')
+        setSession(null)
+        setProfile(null)
+        sessionStorage.clear()
+        localStorage.clear()
+        navigate('/', { replace: true })
+      } else if (currentSession) {
+        console.log('Setting session for:', currentSession.user.email)
+        setSession(currentSession)
+        await getProfile(currentSession.user.id)
+      }
+    })
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [navigate])
+
   if (loading) {
+    console.log('Loading state:', { session: !!session, profile: !!profile })
     return (
       <Center h="100vh">
         <Spinner size="xl" />
@@ -125,8 +142,8 @@ export default function App() {
     )
   }
 
-  // If there's no session, show the Auth component
   if (!session) {
+    console.log('No session, showing Auth component')
     return (
       <Container maxW="container.sm" py={10}>
         <Auth />
@@ -134,8 +151,8 @@ export default function App() {
     )
   }
 
-  // If there's a session but no profile, show a loading state
   if (!profile) {
+    console.log('Session exists but no profile, showing loading')
     return (
       <Center h="100vh">
         <Spinner size="xl" />
@@ -143,39 +160,39 @@ export default function App() {
     )
   }
 
+  console.log('Rendering main content for role:', profile.role)
+  return (
+    <Box minH="100vh" bg="gray.50">
+      <Routes>
+        <Route path="/" element={
+          profile?.role === 'admin' ? <Navigate to="/admin/users" /> :
+          profile?.role === 'customer' ? <Navigate to="/customer/tickets" /> :
+          profile?.role === 'support' ? <Navigate to="/support/tickets" /> :
+          <Navigate to="/" />
+        } />
+        
+        <Route path="/admin/*" element={
+          profile?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />
+        } />
+
+        <Route path="/support/*" element={
+          profile?.role === 'support' ? <SupportDashboard /> : <Navigate to="/" />
+        } />
+
+        <Route path="/customer/*" element={
+          profile?.role === 'customer' ? <CustomerDashboard /> : <Navigate to="/" />
+        } />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Box>
+  )
+}
+
+export default function App() {
   return (
     <Router>
-      <Box minH="100vh" bg="gray.50">
-        <Routes>
-          <Route path="/" element={
-            profile?.role === 'admin' ? <Navigate to="/admin/users" /> :
-            profile?.role === 'customer' ? <Navigate to="/customer" /> :
-            profile?.role === 'support' ? <Navigate to="/support/tickets" /> :
-            <Navigate to="/" />
-          } />
-          
-          <Route path="/admin" element={
-            profile?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />
-          }>
-            <Route path="users" element={<UserManagement />} />
-            <Route path="tickets" element={<div>Tickets page coming soon...</div>} />
-            <Route index element={<Navigate to="users" replace />} />
-          </Route>
-
-          <Route path="/support" element={
-            profile?.role === 'support' ? <SupportDashboard /> : <Navigate to="/" />
-          }>
-            <Route path="tickets" element={<TicketList userRole="support" />} />
-            <Route index element={<Navigate to="tickets" replace />} />
-          </Route>
-
-          <Route path="/customer" element={
-            profile?.role === 'customer' ? <CustomerDashboard /> : <Navigate to="/" />
-          } />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Box>
+      <AppContent />
     </Router>
   )
 }
