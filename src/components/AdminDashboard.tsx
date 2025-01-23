@@ -9,13 +9,15 @@ import {
 import { supabase } from '../lib/supabase'
 import { useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
-import { FiUsers, FiInbox } from 'react-icons/fi'
+import { FiUsers, FiInbox, FiBarChart2 } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
 import { UserManagement } from './admin/UserManagement'
+import { PerformanceMetrics } from './admin/PerformanceMetrics'
 
 const sidebarItems = [
   { label: 'User Management', path: '/admin/users', icon: FiUsers },
   { label: 'Tickets', path: '/admin/tickets', icon: FiInbox },
+  { label: 'Performance', path: '/admin/performance', icon: FiBarChart2 },
 ]
 
 export function AdminDashboard() {
@@ -24,6 +26,7 @@ export function AdminDashboard() {
   const toast = useToast()
   const isTicketsPath = location.pathname.includes('/tickets')
   const isUsersPath = location.pathname.includes('/users')
+  const isPerformancePath = location.pathname.includes('/performance')
 
   async function handleSignOut() {
     try {
@@ -85,6 +88,8 @@ export function AdminDashboard() {
               <TicketList userRole="admin" />
             ) : isUsersPath ? (
               <UserManagement />
+            ) : isPerformancePath ? (
+              <PerformanceMetrics userRole="admin" />
             ) : (
               <Navigate to="users" replace />
             )}

@@ -46,18 +46,18 @@
 - [ ] Customizable queue views
 - [ ] Quick response templates
 - [ ] Bulk operations
-- [ ] Performance metrics
+- [x] Performance metrics
 
 #### Customer Features
 - [ ] Knowledge base/FAQ section
 - [ ] Email integration
 - [ ] Customer feedback system
-- [ ] Live chat
+- [x] Live chat
 
 #### Administrative Features
 - [ ] Team management
 - [ ] Advanced routing rules
-- [ ] Detailed analytics
+- [x] Detailed analytics
 - [ ] Template management
 
 #### Technical Enhancements

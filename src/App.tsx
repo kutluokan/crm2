@@ -7,6 +7,7 @@ import { CustomerDashboard } from './components/CustomerDashboard'
 import { SupportDashboard } from './components/SupportDashboard'
 import { UserManagement } from './components/admin/UserManagement'
 import { TicketList } from './components/tickets/TicketList'
+import { PerformanceMetrics } from './components/admin/PerformanceMetrics'
 import { supabase } from './lib/supabase'
 import { Session } from '@supabase/supabase-js'
 
@@ -184,28 +185,47 @@ function AppContent() {
   console.log('Rendering main content for role:', profile.role)
   return (
     <Box minH="100vh" bg="gray.50">
-      <Routes>
-        <Route path="/" element={
-          profile?.role === 'admin' ? <Navigate to="/admin/users" /> :
-          profile?.role === 'customer' ? <Navigate to="/customer/tickets" /> :
-          profile?.role === 'support' ? <Navigate to="/support/tickets" /> :
-          <Navigate to="/" />
-        } />
-        
-        <Route path="/admin/*" element={
-          profile?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />
-        } />
-
-        <Route path="/support/*" element={
-          profile?.role === 'support' ? <SupportDashboard /> : <Navigate to="/" />
-        } />
-
-        <Route path="/customer/*" element={
-          profile?.role === 'customer' ? <CustomerDashboard /> : <Navigate to="/" />
-        } />
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      {loading ? (
+        <Center h="100vh">
+          <Spinner size="xl" />
+        </Center>
+      ) : !session ? (
+        <Auth />
+      ) : (
+        <Routes>
+          {profile?.role === 'admin' && (
+            <Route path="/admin/*" element={<AdminDashboard />}>
+              <Route path="users" element={<UserManagement />} />
+              <Route path="tickets" element={<TicketList userRole="admin" />} />
+              <Route path="performance" element={<PerformanceMetrics userRole="admin" />} />
+              <Route path="" element={<Navigate to="users" replace />} />
+            </Route>
+          )}
+          {profile?.role === 'support' && (
+            <Route path="/support/*" element={<SupportDashboard />}>
+              <Route path="tickets" element={<TicketList userRole="support" />} />
+              <Route path="performance" element={<PerformanceMetrics userRole="support" userId={profile.id} />} />
+              <Route path="" element={<Navigate to="tickets" replace />} />
+            </Route>
+          )}
+          {profile?.role === 'customer' && (
+            <Route path="/customer/*" element={<CustomerDashboard />}>
+              <Route path="tickets" element={<TicketList userRole="customer" />} />
+              <Route path="help" element={<Box p={6}>Help & Support content here</Box>} />
+              <Route path="" element={<Navigate to="tickets" replace />} />
+            </Route>
+          )}
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={`/${profile?.role || ''}`}
+                replace
+              />
+            }
+          />
+        </Routes>
+      )}
     </Box>
   )
 }
