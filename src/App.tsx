@@ -5,27 +5,33 @@ import { Auth } from './components/Auth'
 import { AdminDashboard } from './components/AdminDashboard'
 import { CustomerDashboard } from './components/CustomerDashboard'
 import { SupportDashboard } from './components/SupportDashboard'
+import { UserManagement } from './components/admin/UserManagement'
 import { supabase } from './lib/supabase'
+import { Session } from '@supabase/supabase-js'
 
 type UserRole = 'admin' | 'customer' | 'support'
 
 interface UserProfile {
   id: string
   role: UserRole
-  email: string
+  full_name?: string | null
+  avatar_url?: string | null
+  created_at: string
+  updated_at: string
 }
 
 export default function App() {
-  const [session, setSession] = useState(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    console.log('App mounted, checking session...')
-    
+    // Clear any existing sessions on mount
+    sessionStorage.clear()
+    localStorage.clear()
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session:', session)
       setSession(session)
       if (session?.user) {
         getProfile(session.user.id)
@@ -35,18 +41,36 @@ export default function App() {
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed:', session)
-      setSession(session)
-      if (session?.user) {
-        getProfile(session.user.id)
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email)
+      
+      if (event === 'SIGNED_OUT') {
+        setSession(null)
         setProfile(null)
         setLoading(false)
+        // Clear any stored state
+        sessionStorage.clear()
+        localStorage.clear()
+      } else if (event === 'SIGNED_IN' && session) {
+        setSession(session)
+        await getProfile(session.user.id)
+      } else {
+        setSession(session)
+        if (session?.user) {
+          await getProfile(session.user.id)
+        } else {
+          setProfile(null)
+          setLoading(false)
+        }
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      // Clear state on unmount
+      setSession(null)
+      setProfile(null)
+    }
   }, [])
 
   async function getProfile(userId: string) {
@@ -57,11 +81,36 @@ export default function App() {
         .eq('id', userId)
         .single()
 
-      if (error) throw error
-      console.log('Profile data:', data)
-      setProfile(data)
+      if (error) {
+        console.error('Error fetching profile:', error)
+        // If profile doesn't exist or there's an error, sign out the user
+        await supabase.auth.signOut()
+        sessionStorage.clear()
+        localStorage.clear()
+        setSession(null)
+        setProfile(null)
+        setLoading(false)
+        return
+      }
+
+      if (data) {
+        setProfile(data)
+      } else {
+        // If no profile data, sign out
+        await supabase.auth.signOut()
+        sessionStorage.clear()
+        localStorage.clear()
+        setSession(null)
+        setProfile(null)
+      }
     } catch (error) {
-      console.error('Error loading user profile:', error)
+      console.error('Error:', error)
+      // On any error, clear everything
+      await supabase.auth.signOut()
+      sessionStorage.clear()
+      localStorage.clear()
+      setSession(null)
+      setProfile(null)
     } finally {
       setLoading(false)
     }
@@ -75,6 +124,7 @@ export default function App() {
     )
   }
 
+  // If there's no session, show the Auth component
   if (!session) {
     return (
       <Container maxW="container.sm" py={10}>
@@ -83,22 +133,40 @@ export default function App() {
     )
   }
 
+  // If there's a session but no profile, show a loading state
+  if (!profile) {
+    return (
+      <Center h="100vh">
+        <Spinner size="xl" />
+      </Center>
+    )
+  }
+
   return (
     <Router>
       <Box minH="100vh" bg="gray.50">
         <Routes>
           <Route path="/" element={
-            profile?.role === 'admin' ? <Navigate to="/admin" /> :
+            profile?.role === 'admin' ? <Navigate to="/admin/users" /> :
+            profile?.role === 'customer' ? <Navigate to="/customer" /> :
             profile?.role === 'support' ? <Navigate to="/support" /> :
-            <Navigate to="/dashboard" />
+            <Navigate to="/" />
           } />
+          
           <Route path="/admin" element={
             profile?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />
-          } />
+          }>
+            <Route path="users" element={<UserManagement />} />
+            <Route path="tickets" element={<div>Tickets page coming soon...</div>} />
+            <Route index element={<Navigate to="users" replace />} />
+          </Route>
+
           <Route path="/support" element={
             profile?.role === 'support' ? <SupportDashboard /> : <Navigate to="/" />
           } />
-          <Route path="/dashboard" element={<CustomerDashboard />} />
+          <Route path="/customer" element={
+            profile?.role === 'customer' ? <CustomerDashboard /> : <Navigate to="/" />
+          } />
         </Routes>
       </Box>
     </Router>

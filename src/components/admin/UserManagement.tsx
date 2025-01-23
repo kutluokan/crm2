@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import {
   Box,
   Container,
@@ -12,28 +11,20 @@ import {
   Select,
   Button,
   useToast,
-  HStack,
   Text,
-  Flex,
 } from '@chakra-ui/react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
-import { Outlet } from 'react-router-dom'
-import { Sidebar } from './Sidebar'
-import { FiUsers, FiInbox } from 'react-icons/fi'
+import { useState, useEffect } from 'react'
+import { supabase, supabaseAdmin } from '../../lib/supabase'
 
 interface User {
   id: string
   email: string
   role: string
   created_at: string
+  full_name: string | null
 }
 
-const sidebarItems = [
-  { label: 'User Management', path: '/admin/users', icon: FiUsers },
-  { label: 'Tickets', path: '/admin/tickets', icon: FiInbox },
-]
-
-export function AdminDashboard() {
+export function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const toast = useToast()
@@ -47,8 +38,10 @@ export function AdminDashboard() {
       // First get all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, role, full_name, created_at')
         .order('created_at', { ascending: false });
+
+      console.log('Profiles from database:', profiles);
 
       if (profilesError) throw profilesError;
 
@@ -56,15 +49,22 @@ export function AdminDashboard() {
       const { data: authUsers, error: usersError } = await supabase
         .rpc('get_users', {});
 
+      console.log('Auth users from database:', authUsers);
+
       if (usersError) throw usersError;
 
       // Combine the data
       const usersMap = new Map(authUsers.map(user => [user.id, user.email]));
       
-      setUsers(profiles.map(profile => ({
+      const mappedUsers = profiles.map(profile => ({
         ...profile,
-        email: usersMap.get(profile.id) || 'N/A'
-      })));
+        email: usersMap.get(profile.id) || 'N/A',
+        full_name: profile.full_name
+      }));
+
+      console.log('Final mapped users:', mappedUsers);
+      
+      setUsers(mappedUsers);
     } catch (error) {
       console.error('Error fetching users:', error)
       toast({
@@ -106,7 +106,7 @@ export function AdminDashboard() {
 
       // If the deleted user is the current user, sign out
       if (currentUserId === userId) {
-        await handleSignOut();
+        window.location.href = '/'
       }
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -147,41 +147,54 @@ export function AdminDashboard() {
     }
   }
 
-  async function handleSignOut() {
-    try {
-      // Clear any stored sessions
-      sessionStorage.clear()
-      localStorage.clear()
-      
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-
-      // Force a page reload to clear all state
-      window.location.href = '/'
-    } catch (error) {
-      console.error('Error signing out:', error)
-      // Force reload anyway on error
-      window.location.href = '/'
-    }
-  }
-
   return (
-    <Flex>
-      <Sidebar items={sidebarItems} />
-      <Box ml="240px" w="calc(100% - 240px)" minH="100vh" bg="gray.50">
-        <Container maxW="container.xl" py={8}>
-          <HStack justify="space-between" mb={8}>
-            <Heading size="lg">Admin Dashboard</Heading>
-            <Button onClick={handleSignOut} colorScheme="red" variant="outline">
-              Sign Out
-            </Button>
-          </HStack>
-
-          <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
-            <Outlet />
-          </Box>
-        </Container>
-      </Box>
-    </Flex>
+    <Box p={6}>
+      <Heading size="md" mb={4}>User Management</Heading>
+      {loading ? (
+        <Text>Loading users...</Text>
+      ) : (
+        <Table variant="simple">
+          <Thead>
+            <Tr>
+              <Th>Email</Th>
+              <Th>Display Name</Th>
+              <Th>Role</Th>
+              <Th>Created At</Th>
+              <Th>Actions</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {users.map(user => (
+              <Tr key={user.id}>
+                <Td>{user.email}</Td>
+                <Td>{user.full_name || 'N/A'}</Td>
+                <Td>{user.role}</Td>
+                <Td>{new Date(user.created_at).toLocaleDateString()}</Td>
+                <Td>
+                  <Select
+                    value={user.role}
+                    onChange={(e) => updateUserRole(user.id, e.target.value)}
+                    maxW="200px"
+                  >
+                    <option value="customer">Customer</option>
+                    <option value="support">Support</option>
+                    <option value="admin">Admin</option>
+                  </Select>
+                </Td>
+                <Td>
+                  <Button
+                    colorScheme="red"
+                    size="sm"
+                    onClick={() => deleteUser(user.id)}
+                  >
+                    Delete
+                  </Button>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      )}
+    </Box>
   )
-}
+} 

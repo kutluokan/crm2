@@ -28,34 +28,62 @@ export function Auth() {
     return () => subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    // Clear any existing sessions on mount
+    sessionStorage.clear()
+  }, [])
+
   const handleAnonymousSignIn = async () => {
     try {
+      console.log('Starting anonymous admin sign in...')
+      
       // Generate a random email and password for anonymous users
       const randomId = Math.random().toString(36).substring(2)
-      const email = `anonymous_${randomId}@temp.com`
+      const email = `anonymous_admin_${randomId}@temp.com`
       const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+      const displayName = `Anonymous Admin ${randomId.substring(0, 4)}`
       
-      const { data, error } = await supabase.auth.signUp({
+      console.log('Generated credentials:', { email })
+      
+      // First sign up the user
+      console.log('Attempting to sign up...')
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            role: 'admin'
+            role: 'admin',
+            full_name: displayName
           }
         }
       })
 
-      if (error) throw error
-      console.log('Anonymous sign in successful:', data)
+      if (signUpError) {
+        console.error('Sign up error:', signUpError)
+        throw signUpError
+      }
+
+      if (!signUpData.user) {
+        throw new Error('No user data returned after signup')
+      }
+
+      // Wait a moment for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
-      // Store credentials in session storage in case we need them later
-      sessionStorage.setItem('anonymousCredentials', JSON.stringify({ email, password }))
+      // Then sign in with the credentials
+      console.log('Attempting to sign in...')
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (signInError) throw signInError
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in anonymously:', error)
       toast({
         title: 'Error',
-        description: 'Failed to sign in anonymously. Please try again.',
+        description: error.message || 'Failed to sign in anonymously',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -68,21 +96,29 @@ export function Auth() {
       const randomId = Math.random().toString(36).substring(2)
       const email = `anonymous_customer_${randomId}@temp.com`
       const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+      const displayName = `Anonymous Customer ${randomId.substring(0, 4)}`
       
-      const { data, error } = await supabase.auth.signUp({
+      // First sign up the user
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            role: 'customer'
+            role: 'customer',
+            full_name: displayName
           }
         }
       })
 
-      if (error) throw error
-      console.log('Anonymous customer sign in successful:', data)
+      if (signUpError) throw signUpError
       
-      sessionStorage.setItem('anonymousCustomerCredentials', JSON.stringify({ email, password }))
+      // Then sign in with the credentials
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (signInError) throw signInError
       
     } catch (error) {
       console.error('Error signing in anonymously as customer:', error)
@@ -95,10 +131,52 @@ export function Auth() {
       })
     }
   }
+
+  const handleAnonymousSupportSignIn = async () => {
+    try {
+      const randomId = Math.random().toString(36).substring(2)
+      const email = `anonymous_support_${randomId}@temp.com`
+      const password = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+      const displayName = `Anonymous Support ${randomId.substring(0, 4)}`
+      
+      // First sign up the user
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            role: 'support',
+            full_name: displayName
+          }
+        }
+      })
+
+      if (signUpError) throw signUpError
+      
+      // Then sign in with the credentials
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (signInError) throw signInError
+      
+    } catch (error) {
+      console.error('Error signing in anonymously as support:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to sign in anonymously as support. Please try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
+  }
+
   return (
     <Box bg="white" p={8} rounded="lg" shadow="base">
       <VStack spacing={6}>
-        <Heading size="lg" textAlign="center">Welcome to CRM</Heading>
+        <Heading size="lg" textAlign="center">Welcome to Auto-CRM</Heading>
         
         <Button 
           colorScheme="blue" 
@@ -106,7 +184,16 @@ export function Auth() {
           onClick={handleAnonymousSignIn}
           size="lg"
         >
-          Continue as Admin (Anonymous)
+          Continue as Admin
+        </Button>
+
+        <Button 
+          colorScheme="purple" 
+          width="100%" 
+          onClick={handleAnonymousSupportSignIn}
+          size="lg"
+        >
+          Continue as Support
         </Button>
         
         <Button 
@@ -115,7 +202,7 @@ export function Auth() {
           onClick={handleAnonymousCustomerSignIn}
           size="lg"
         >
-          Continue as Customer (Anonymous)
+          Continue as Customer
         </Button>
         
         <Divider />
