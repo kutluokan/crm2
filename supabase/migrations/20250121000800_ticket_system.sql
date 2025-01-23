@@ -91,4 +91,9 @@ create policy "Users can create messages for accessible tickets"
     and (t.customer_id = auth.uid() 
          or t.assigned_to = auth.uid()
          or exists (select 1 from profiles where id = auth.uid() and role = 'admin'))
-  )); 
+  ));
+
+-- Enable realtime for ticket messages
+drop publication if exists supabase_realtime;
+create publication supabase_realtime for table ticket_messages;
+alter table ticket_messages replica identity full; 

@@ -12,8 +12,15 @@ import {
   useToast,
   Select,
   Text,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalCloseButton,
+  ModalBody,
+  useDisclosure,
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
+import { TicketDetails } from './TicketDetails'
 
 interface Ticket {
   id: string
@@ -36,6 +43,8 @@ interface TicketListProps {
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
+  const { isOpen, onOpen, onClose } = useDisclosure()
   const toast = useToast()
 
   useEffect(() => {
@@ -152,66 +161,90 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }
 
+  function handleViewDetails(ticketId: string) {
+    setSelectedTicketId(ticketId)
+    onOpen()
+  }
+
   if (loading) {
     return <Text p={6}>Loading tickets...</Text>
   }
 
   return (
-    <Box overflowX="auto">
-      <Table variant="simple">
-        <Thead>
-          <Tr>
-            <Th>Title</Th>
-            <Th>Status</Th>
-            <Th>Priority</Th>
-            {userRole !== 'customer' && <Th>Customer</Th>}
-            <Th>Created</Th>
-            {(userRole === 'admin' || userRole === 'support') && <Th>Actions</Th>}
-          </Tr>
-        </Thead>
-        <Tbody>
-          {tickets.map(ticket => (
-            <Tr key={ticket.id}>
-              <Td>{ticket.title}</Td>
-              <Td>
-                {userRole === 'customer' ? (
-                  <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
-                    {ticket.status}
-                  </Badge>
-                ) : (
-                  <Select
-                    value={ticket.status}
-                    onChange={(e) => updateTicketStatus(ticket.id, e.target.value)}
-                    size="sm"
-                    width="150px"
-                  >
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="closed">Closed</option>
-                  </Select>
-                )}
-              </Td>
-              <Td>
-                <Badge colorScheme={getPriorityColor(ticket.priority)}>
-                  {ticket.priority}
-                </Badge>
-              </Td>
-              {userRole !== 'customer' && (
-                <Td>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
-              )}
-              <Td>{new Date(ticket.created_at).toLocaleDateString()}</Td>
-              {(userRole === 'admin' || userRole === 'support') && (
+    <>
+      <Box overflowX="auto">
+        <Table variant="simple">
+          <Thead>
+            <Tr>
+              <Th>Title</Th>
+              <Th>Status</Th>
+              <Th>Priority</Th>
+              {userRole !== 'customer' && <Th>Customer</Th>}
+              <Th>Created</Th>
+              <Th>Actions</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {tickets.map(ticket => (
+              <Tr key={ticket.id}>
+                <Td>{ticket.title}</Td>
                 <Td>
-                  <Button size="sm" colorScheme="blue">
+                  {userRole === 'customer' ? (
+                    <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
+                      {ticket.status}
+                    </Badge>
+                  ) : (
+                    <Select
+                      value={ticket.status}
+                      onChange={(e) => updateTicketStatus(ticket.id, e.target.value)}
+                      size="sm"
+                      width="150px"
+                    >
+                      <option value="open">Open</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="closed">Closed</option>
+                    </Select>
+                  )}
+                </Td>
+                <Td>
+                  <Badge colorScheme={getPriorityColor(ticket.priority)}>
+                    {ticket.priority}
+                  </Badge>
+                </Td>
+                {userRole !== 'customer' && (
+                  <Td>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
+                )}
+                <Td>{new Date(ticket.created_at).toLocaleDateString()}</Td>
+                <Td>
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    onClick={() => handleViewDetails(ticket.id)}
+                  >
                     View Details
                   </Button>
                 </Td>
-              )}
-            </Tr>
-          ))}
-        </Tbody>
-      </Table>
-    </Box>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </Box>
+
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent maxW="800px" h="90vh" my="5vh" overflow="hidden">
+          <ModalCloseButton zIndex="10" />
+          <ModalBody p={0} display="flex" flexDirection="column" overflow="hidden">
+            {selectedTicketId && (
+              <TicketDetails
+                ticketId={selectedTicketId}
+                userRole={userRole}
+              />
+            )}
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+    </>
   )
 } 

@@ -15,17 +15,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    storage: window.sessionStorage, // Use sessionStorage instead of localStorage
+    storage: window.localStorage,
   },
   db: {
     schema: 'public'
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    },
+    channels: {
+      retryAfterError: 2000,
+      retryAttempts: 5
+    }
+  }
 });
 
 // Admin client with service role key for admin operations
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || '', {
   auth: {
-    autoRefreshToken: false, // Disable auto refresh for admin client
-    persistSession: false, // Don't persist admin sessions
+    autoRefreshToken: false,
+    persistSession: false,
   }
 });

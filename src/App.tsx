@@ -39,42 +39,67 @@ function AppContent() {
       if (error) {
         console.error('Error fetching profile:', error)
         await handleSignOut()
-        return
+        return null
       }
 
       if (data) {
         console.log('Profile fetched successfully:', data.role)
-        setProfile(data)
+        return data
       } else {
         console.log('No profile found')
         await handleSignOut()
+        return null
       }
     } catch (error) {
       console.error('Error:', error)
       await handleSignOut()
+      return null
     }
   }
 
   async function handleSignOut() {
     console.log('Signing out...')
     try {
+      await supabase.auth.signOut()
       setSession(null)
       setProfile(null)
-      sessionStorage.clear()
-      localStorage.clear()
-      await supabase.auth.signOut()
       navigate('/', { replace: true })
     } catch (error) {
       console.error('Error signing out:', error)
       setSession(null)
       setProfile(null)
-      sessionStorage.clear()
-      localStorage.clear()
       navigate('/', { replace: true })
     } finally {
       setLoading(false)
     }
   }
+
+  // Effect to handle profile loading whenever session changes
+  useEffect(() => {
+    let mounted = true
+
+    async function loadProfile() {
+      if (!session?.user?.id) {
+        setProfile(null)
+        return
+      }
+
+      setLoading(true)
+      const profileData = await getProfile(session.user.id)
+      if (mounted) {
+        if (profileData) {
+          setProfile(profileData)
+        }
+        setLoading(false)
+      }
+    }
+
+    loadProfile()
+
+    return () => {
+      mounted = false
+    }
+  }, [session])
 
   useEffect(() => {
     let mounted = true
@@ -89,18 +114,17 @@ function AppContent() {
         if (initialSession?.user) {
           console.log('Initial session found for:', initialSession.user.email)
           setSession(initialSession)
-          await getProfile(initialSession.user.id)
         } else {
           console.log('No initial session found')
           setSession(null)
           setProfile(null)
+          setLoading(false)
         }
       } catch (error) {
         console.error('Error initializing session:', error)
-      } finally {
-        if (mounted) {
-          setLoading(false)
-        }
+        setSession(null)
+        setProfile(null)
+        setLoading(false)
       }
     }
 
@@ -117,13 +141,11 @@ function AppContent() {
         console.log('User signed out')
         setSession(null)
         setProfile(null)
-        sessionStorage.clear()
-        localStorage.clear()
+        setLoading(false)
         navigate('/', { replace: true })
-      } else if (currentSession) {
-        console.log('Setting session for:', currentSession.user.email)
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        console.log('Setting session for:', currentSession?.user?.email)
         setSession(currentSession)
-        await getProfile(currentSession.user.id)
       }
     })
 
@@ -133,8 +155,9 @@ function AppContent() {
     }
   }, [navigate])
 
+  console.log('Current state -', 'Session:', !!session, 'Profile:', !!profile, 'Loading:', loading)
+
   if (loading) {
-    console.log('Loading state:', { session: !!session, profile: !!profile })
     return (
       <Center h="100vh">
         <Spinner size="xl" />
@@ -143,7 +166,6 @@ function AppContent() {
   }
 
   if (!session) {
-    console.log('No session, showing Auth component')
     return (
       <Container maxW="container.sm" py={10}>
         <Auth />
@@ -152,7 +174,6 @@ function AppContent() {
   }
 
   if (!profile) {
-    console.log('Session exists but no profile, showing loading')
     return (
       <Center h="100vh">
         <Spinner size="xl" />
