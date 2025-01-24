@@ -10,7 +10,6 @@ import {
   VStack,
   HStack,
   Select,
-  Text,
   Progress,
   useColorModeValue,
 } from '@chakra-ui/react'
@@ -109,6 +108,10 @@ export function PerformanceMetrics({ userRole, userId }: PerformanceMetricsProps
     } finally {
       setLoading(false)
     }
+  }
+
+  if (loading) {
+    return <Progress size="xs" isIndeterminate />
   }
 
   const bgColor = useColorModeValue('white', 'gray.800')

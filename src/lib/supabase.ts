@@ -23,10 +23,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
     params: {
       eventsPerSecond: 10
-    },
-    channels: {
-      retryAfterError: 2000,
-      retryAttempts: 5
     }
   }
 });

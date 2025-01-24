@@ -24,8 +24,6 @@ import {
   FormLabel,
   Checkbox,
   ButtonGroup,
-  IconButton,
-  Tooltip,
   useColorModeValue,
   Input,
   InputGroup,
@@ -34,7 +32,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { TicketDetails } from './TicketDetails'
 import { RealtimeChannel } from '@supabase/supabase-js'
-import { FiCheck, FiUserPlus, FiSearch } from 'react-icons/fi'
+import { FiSearch } from 'react-icons/fi'
 
 interface Tag {
   id: string;
@@ -72,6 +70,28 @@ type SortOrder = 'asc' | 'desc'
 interface SupportStaff {
   id: string
   full_name: string
+}
+
+interface RawTicket {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_at: string;
+  customer_id: string;
+  assigned_to: string | null;
+  customer: {
+    id: string;
+    full_name: string | null;
+  } | null;
+  assignee: {
+    id: string;
+    full_name: string | null;
+  } | null;
+  ticket_tags: Array<{
+    tag: Tag;
+  }>;
 }
 
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
@@ -206,37 +226,46 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         async (payload) => {
           console.log('Real-time update:', payload)
           
-          // Refresh the tickets list when changes occur
           if (payload.eventType === 'INSERT') {
-            // For inserts, fetch just the new ticket and add it to the list
             const { data: newTicket, error } = await supabase
               .from('tickets')
               .select(`
-                id,
-                title,
-                description,
-                status,
-                priority,
-                created_at,
-                customer_id,
-                assigned_to,
-                customer:profiles!tickets_customer_id_fkey (
-                  id,
-                  full_name
-                ),
-                assignee:profiles!tickets_assigned_to_fkey (
-                  id,
-                  full_name
+                *,
+                customer:customer_id(id, full_name),
+                assignee:assigned_to(id, full_name),
+                ticket_tags(
+                  tag:tags(
+                    id,
+                    name,
+                    color
+                  )
                 )
               `)
               .eq('id', payload.new.id)
               .single()
 
             if (!error && newTicket) {
-              setTickets(current => [newTicket, ...current])
+              const { data: authUsers } = await supabase.auth.admin.listUsers()
+              const emailMap = new Map(authUsers?.users.map(u => [u.id, u.email || 'N/A']) || [])
+
+              const transformedTicket = {
+                ...newTicket,
+                assigned_to: newTicket.assigned_to || '',
+                customer: {
+                  id: newTicket.customer?.id || '',
+                  email: emailMap.get(newTicket.customer_id) || 'N/A',
+                  full_name: newTicket.customer?.full_name || 'N/A'
+                },
+                assignee: newTicket.assignee ? {
+                  id: newTicket.assignee.id,
+                  full_name: newTicket.assignee.full_name || 'N/A'
+                } : undefined,
+                tags: (newTicket as RawTicket).ticket_tags?.map(tt => tt.tag) || []
+              } as Ticket
+
+              setTickets(current => [transformedTicket, ...current])
             }
           } else {
-            // For updates and deletes, refresh the entire list
             fetchTickets()
           }
         }
@@ -248,29 +277,14 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
 
   async function fetchTickets() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No user found')
-
-      let query = supabase
+      setLoading(true)
+      const { data: tickets, error } = await supabase
         .from('tickets')
         .select(`
-          id,
-          title,
-          description,
-          status,
-          priority,
-          created_at,
-          customer_id,
-          assigned_to,
-          customer:profiles!tickets_customer_id_fkey (
-            id,
-            full_name
-          ),
-          assignee:profiles!tickets_assigned_to_fkey (
-            id,
-            full_name
-          ),
-          tags:ticket_tags(
+          *,
+          customer:customer_id(id, full_name),
+          assignee:assigned_to(id, full_name),
+          ticket_tags(
             tag:tags(
               id,
               name,
@@ -280,57 +294,40 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         `)
         .order(sortField, { ascending: sortOrder === 'asc' })
 
-      // Apply filters based on role and selected filters
-      if (userRole === 'customer') {
-        query = query.eq('customer_id', user.id)
-      } else if (userRole === 'support') {
-        query = query.eq('assigned_to', user.id)
-      } else if (userRole === 'admin') {
-        if (filterCustomer) {
-          query = query.eq('customer_id', filterCustomer)
-        }
-        if (filterSupport) {
-          query = query.eq('assigned_to', filterSupport)
-        }
-      }
-
-      const { data, error } = await query
-
       if (error) throw error
 
-      // Get all unique user IDs from tickets
-      const userIds = new Set([
-        ...data.map(t => t.customer_id),
-        ...data.map(t => t.assigned_to).filter(Boolean)
-      ])
+      const { data: authUsers } = await supabase.auth.admin.listUsers()
+      const emailMap = new Map(authUsers?.users.map(u => [u.id, u.email || 'N/A']) || [])
 
-      // Fetch emails from auth.users
-      const { data: authUsers } = await supabase.rpc('get_users', {})
-      const emailMap = new Map(authUsers?.map(u => [u.id, u.email]) || [])
-
-      // Transform the data to match our Ticket interface
-      const transformedTickets = (data || []).map(ticket => ({
-        ...ticket,
+      const transformedTickets = (tickets as RawTicket[]).map(ticket => ({
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        assigned_to: ticket.assigned_to || '',
         customer: {
-          id: ticket.customer_id,
+          id: ticket.customer?.id || '',
           email: emailMap.get(ticket.customer_id) || 'N/A',
           full_name: ticket.customer?.full_name || 'N/A'
         },
-        assigned_to: ticket.assigned_to || null,
         assignee: ticket.assignee ? {
           id: ticket.assignee.id,
           full_name: ticket.assignee.full_name || 'N/A'
         } : undefined,
-        tags: (ticket.tags || []).map((t: any) => t.tag)
-      }))
+        tags: ticket.ticket_tags?.map(tt => tt.tag) || []
+      })) as unknown as Ticket[]
 
       setTickets(transformedTickets)
     } catch (error) {
       console.error('Error fetching tickets:', error)
       toast({
         title: 'Error fetching tickets',
+        description: error instanceof Error ? error.message : 'Unknown error',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       })
     } finally {
       setLoading(false)

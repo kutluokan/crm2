@@ -61,6 +61,7 @@ export function ResponseTemplates({ userRole, userId }: ResponseTemplatesProps) 
 
   async function fetchTemplates() {
     try {
+      setLoading(true)
       let query = supabase
         .from('response_templates')
         .select('*')
@@ -161,6 +162,14 @@ export function ResponseTemplates({ userRole, userId }: ResponseTemplatesProps) 
   function handleEdit(template: Template) {
     setCurrentTemplate(template)
     onOpen()
+  }
+
+  if (loading) {
+    return (
+      <Box p={4}>
+        <Text>Loading templates...</Text>
+      </Box>
+    )
   }
 
   return (

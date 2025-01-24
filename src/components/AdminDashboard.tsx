@@ -1,10 +1,9 @@
 import {
   Box,
   Heading,
-  useToast,
   Flex,
 } from '@chakra-ui/react'
-import { useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { useLocation, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiUsers, FiInbox, FiBarChart2, FiMessageSquare } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'

@@ -1,7 +1,5 @@
 import {
   Box,
-  Container,
-  Heading,
   Table,
   Thead,
   Tbody,
@@ -16,13 +14,6 @@ import {
 import { useState, useEffect } from 'react'
 import { supabase, supabaseAdmin } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
-
-interface Profile {
-  id: string
-  role: string
-  full_name: string | null
-  created_at: string
-}
 
 interface AuthUser {
   id: string

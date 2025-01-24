@@ -30,7 +30,7 @@ import {
 } from '@chakra-ui/react';
 import { FiEdit2, FiPlus, FiX } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
-import TicketChat from '../../components/TicketChat';
+import TicketChat from '../TicketChat';
 import { EditTicket } from './EditTicket';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -38,6 +38,11 @@ interface Tag {
   id: string;
   name: string;
   color: string;
+}
+
+interface User {
+  id: string;
+  email: string;
 }
 
 interface Ticket {
@@ -127,7 +132,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
 
         if (usersError) throw usersError;
 
-        const customerUser = users?.find(u => u.id === ticketData.customer_id);
+        const customerUser = users?.find((u: User) => u.id === ticketData.customer_id);
         if (customerUser) {
           setCustomerEmail(customerUser.email);
         }

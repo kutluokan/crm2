@@ -1,6 +1,6 @@
 import { Box, VStack, Button, Icon, Text, useToast } from '@chakra-ui/react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { FiUsers, FiInbox, FiHelpCircle, FiLogOut } from 'react-icons/fi'
+import { FiLogOut } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 
 interface MenuItem {

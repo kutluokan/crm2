@@ -7,7 +7,6 @@ import {
   HStack,
   Text,
   Avatar,
-  Flex,
   Switch,
   FormControl,
   FormLabel,
@@ -35,15 +34,6 @@ interface Message {
   user: UserProfile;
 }
 
-interface SupabaseMessage {
-  id: string;
-  message: string;
-  created_at: string;
-  user_id: string;
-  is_internal: boolean;
-  user: UserProfile | null;
-}
-
 interface TicketChatProps {
   ticketId: string;
   currentUserId: string;
@@ -60,7 +50,6 @@ interface Template {
 export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [currentUserName, setCurrentUserName] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -68,7 +57,6 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
 
   useEffect(() => {
     loadMessages();
-    getCurrentUserName();
     setupMessagesSubscription();
     if (isSupport) {
       fetchTemplates();
@@ -81,44 +69,6 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
 
   function scrollToBottom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }
-
-  async function getCurrentUserName() {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', currentUserId)
-        .single();
-
-      if (profile) {
-        setCurrentUserName(profile.full_name);
-      }
-    } catch (error) {
-      console.error('Error fetching user name:', error);
-    }
-  }
-
-  function setupMessagesSubscription() {
-    const channel = supabase
-      .channel('ticket-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'ticket_messages',
-          filter: `ticket_id=eq.${ticketId}`,
-        },
-        () => {
-          loadMessages();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
   }
 
   async function loadMessages() {
@@ -202,6 +152,28 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       console.error('Error sending message:', error);
     }
   };
+
+  function setupMessagesSubscription() {
+    const channel = supabase
+      .channel('ticket-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ticket_messages',
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        () => {
+          loadMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }
 
   return (
     <Box h="100%" display="flex" flexDirection="column">
