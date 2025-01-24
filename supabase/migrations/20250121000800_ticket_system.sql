@@ -21,6 +21,18 @@ create table ticket_messages (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Create response_templates table
+create table response_templates (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  content text not null,
+  category text not null,
+  created_by uuid references profiles(id) not null,
+  is_global boolean default false not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- Create function to automatically assign tickets to support staff
 create or replace function auto_assign_ticket()
 returns trigger as $$

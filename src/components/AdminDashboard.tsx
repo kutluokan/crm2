@@ -6,22 +6,43 @@ import {
 } from '@chakra-ui/react'
 import { useLocation, useNavigate, Navigate } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
-import { FiUsers, FiInbox, FiBarChart2 } from 'react-icons/fi'
+import { FiUsers, FiInbox, FiBarChart2, FiMessageSquare } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
 import { UserManagement } from './admin/UserManagement'
 import { PerformanceMetrics } from './admin/PerformanceMetrics'
+import { ResponseTemplates } from './admin/ResponseTemplates'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 
 const sidebarItems = [
   { label: 'User Management', path: '/admin/users', icon: FiUsers },
   { label: 'Tickets', path: '/admin/tickets', icon: FiInbox },
   { label: 'Performance', path: '/admin/performance', icon: FiBarChart2 },
+  { label: 'Templates', path: '/admin/templates', icon: FiMessageSquare },
 ]
 
 export function AdminDashboard() {
   const location = useLocation()
+  const [userId, setUserId] = useState('')
   const isTicketsPath = location.pathname.includes('/tickets')
   const isUsersPath = location.pathname.includes('/users')
   const isPerformancePath = location.pathname.includes('/performance')
+  const isTemplatesPath = location.pathname.includes('/templates')
+
+  useEffect(() => {
+    getCurrentUser()
+  }, [])
+
+  async function getCurrentUser() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserId(user.id)
+      }
+    } catch (error) {
+      console.error('Error getting current user:', error)
+    }
+  }
 
   return (
     <Flex h="100vh" overflow="hidden">
@@ -54,6 +75,8 @@ export function AdminDashboard() {
               <UserManagement />
             ) : isPerformancePath ? (
               <PerformanceMetrics userRole="admin" />
+            ) : isTemplatesPath ? (
+              <ResponseTemplates userRole="admin" userId={userId} />
             ) : (
               <Navigate to="users" replace />
             )}

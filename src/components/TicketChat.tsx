@@ -12,7 +12,14 @@ import {
   FormControl,
   FormLabel,
   Badge,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuGroup,
+  IconButton,
 } from '@chakra-ui/react';
+import { FiChevronDown } from 'react-icons/fi';
 import { supabase } from '../lib/supabase';
 
 interface UserProfile {
@@ -43,11 +50,19 @@ interface TicketChatProps {
   isSupport: boolean;
 }
 
+interface Template {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+}
+
 export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [currentUserName, setCurrentUserName] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -55,6 +70,9 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
     loadMessages();
     getCurrentUserName();
     setupMessagesSubscription();
+    if (isSupport) {
+      fetchTemplates();
+    }
   }, [ticketId]);
 
   useEffect(() => {
@@ -139,6 +157,29 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
     }
   }
 
+  async function fetchTemplates() {
+    try {
+      const { data, error } = await supabase
+        .from('response_templates')
+        .select('*')
+        .or(`created_by.eq.${currentUserId},is_global.eq.true`)
+        .order('category')
+        .order('title');
+
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  }
+
+  function insertTemplate(content: string) {
+    setNewMessage(prev => {
+      const hasText = prev.trim().length > 0;
+      return hasText ? `${prev}\n\n${content}` : content;
+    });
+  }
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -191,7 +232,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
                   <Badge colorScheme="orange">Internal Note</Badge>
                 )}
               </HStack>
-              <Text>{message.message}</Text>
+              <Text whiteSpace="pre-wrap">{message.message}</Text>
             </Box>
           ))}
           <div ref={messagesEndRef} />
@@ -220,6 +261,32 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
                 placeholder={isInternal ? "Add an internal note..." : "Type a message..."}
                 bg="white"
               />
+              {isSupport && templates.length > 0 && (
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    icon={<FiChevronDown />}
+                    variant="outline"
+                    aria-label="Templates"
+                  />
+                  <MenuList>
+                    {Array.from(new Set(templates.map(t => t.category))).map(category => (
+                      <MenuGroup key={category} title={category.charAt(0).toUpperCase() + category.slice(1)}>
+                        {templates
+                          .filter(t => t.category === category)
+                          .map(template => (
+                            <MenuItem
+                              key={template.id}
+                              onClick={() => insertTemplate(template.content)}
+                            >
+                              {template.title}
+                            </MenuItem>
+                          ))}
+                      </MenuGroup>
+                    ))}
+                  </MenuList>
+                </Menu>
+              )}
               <Button type="submit" colorScheme="blue">
                 Send
               </Button>

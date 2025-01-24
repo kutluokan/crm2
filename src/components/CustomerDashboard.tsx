@@ -1,7 +1,23 @@
-import { Box, Container, Heading, Text, Flex } from '@chakra-ui/react'
+import {
+  Box,
+  Container,
+  Heading,
+  Text,
+  Flex,
+  Button,
+  HStack,
+  useDisclosure,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+} from '@chakra-ui/react'
 import { Sidebar } from './Sidebar'
-import { FiHelpCircle, FiList } from 'react-icons/fi'
+import { FiHelpCircle, FiList, FiPlus } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
+import { CreateTicket } from './tickets/CreateTicket'
 import { useLocation, Navigate } from 'react-router-dom'
 
 const sidebarItems = [
@@ -11,6 +27,7 @@ const sidebarItems = [
 
 export function CustomerDashboard() {
   const location = useLocation()
+  const { isOpen, onOpen, onClose } = useDisclosure()
   const isTicketsPath = location.pathname.includes('/tickets')
   const isHelpPath = location.pathname.includes('/help')
 
@@ -36,7 +53,18 @@ export function CustomerDashboard() {
         }}
       >
         <Box p={8} maxW="100%" mx="auto">
-          <Heading size="lg" mb={8}>Customer Dashboard</Heading>
+          <HStack justify="space-between" mb={8}>
+            <Heading size="lg">Customer Dashboard</Heading>
+            {isTicketsPath && (
+              <Button
+                leftIcon={<FiPlus />}
+                colorScheme="blue"
+                onClick={onOpen}
+              >
+                Create Ticket
+              </Button>
+            )}
+          </HStack>
 
           <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
             {isTicketsPath ? (
@@ -54,6 +82,17 @@ export function CustomerDashboard() {
           </Box>
         </Box>
       </Box>
+
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Create New Ticket</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <CreateTicket onSuccess={onClose} />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Flex>
   )
 }

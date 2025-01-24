@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Button,
@@ -12,29 +12,57 @@ import {
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
 
-export function CreateTicket() {
+interface CreateTicketProps {
+  onSuccess?: () => void
+}
+
+export function CreateTicket({ onSuccess }: CreateTicketProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('medium')
   const [loading, setLoading] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const toast = useToast()
+
+  useEffect(() => {
+    getCurrentUser()
+  }, [])
+
+  async function getCurrentUser() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserId(user.id)
+      }
+    } catch (error) {
+      console.error('Error getting current user:', error)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    
+    if (!userId) {
+      toast({
+        title: 'Error creating ticket',
+        description: 'User not authenticated',
+        status: 'error',
+        duration: 3000,
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('No user found')
-
       const { error } = await supabase
         .from('tickets')
         .insert([
           {
-            title,
-            description,
+            title: title.trim(),
+            description: description.trim(),
             priority,
-            customer_id: user.id,
+            customer_id: userId,
           }
         ])
 
@@ -50,10 +78,16 @@ export function CreateTicket() {
       setTitle('')
       setDescription('')
       setPriority('medium')
+
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess()
+      }
     } catch (error) {
       console.error('Error creating ticket:', error)
       toast({
         title: 'Error creating ticket',
+        description: error instanceof Error ? error.message : 'An error occurred',
         status: 'error',
         duration: 3000,
       })
@@ -63,14 +97,14 @@ export function CreateTicket() {
   }
 
   return (
-    <Box as="form" onSubmit={handleSubmit} p={6}>
-      <VStack spacing={4} align="stretch">
+    <Box as="form" onSubmit={handleSubmit}>
+      <VStack spacing={4}>
         <FormControl isRequired>
           <FormLabel>Title</FormLabel>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Brief description of your issue"
+            placeholder="Brief description of the issue"
           />
         </FormControl>
 
@@ -79,8 +113,8 @@ export function CreateTicket() {
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Detailed description of your issue"
-            minH="200px"
+            placeholder="Detailed explanation of your issue"
+            rows={6}
           />
         </FormControl>
 
@@ -100,8 +134,10 @@ export function CreateTicket() {
         <Button
           type="submit"
           colorScheme="blue"
+          width="full"
           isLoading={loading}
           loadingText="Creating..."
+          isDisabled={!userId}
         >
           Create Ticket
         </Button>
