@@ -27,11 +27,14 @@ import {
   IconButton,
   Tooltip,
   useColorModeValue,
+  Input,
+  InputGroup,
+  InputLeftElement,
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
 import { TicketDetails } from './TicketDetails'
 import { RealtimeChannel } from '@supabase/supabase-js'
-import { FiCheck, FiUserPlus } from 'react-icons/fi'
+import { FiCheck, FiUserPlus, FiSearch } from 'react-icons/fi'
 
 interface Tag {
   id: string;
@@ -79,6 +82,11 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [filterCustomer, setFilterCustomer] = useState<string>('')
   const [filterSupport, setFilterSupport] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [supportSearch, setSupportSearch] = useState('')
+  const [filteredCustomers, setFilteredCustomers] = useState<Array<{ id: string; full_name: string }>>([])
+  const [filteredSupportStaff, setFilteredSupportStaff] = useState<SupportStaff[]>([])
   const [customers, setCustomers] = useState<Array<{ id: string; full_name: string }>>([])
   const [supportStaff, setSupportStaff] = useState<SupportStaff[]>([])
   const { isOpen, onOpen, onClose } = useDisclosure()
@@ -454,6 +462,38 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }
 
+  // Filter tickets based on search query
+  const filteredTickets = tickets.filter(ticket => {
+    const searchLower = searchQuery.toLowerCase()
+    return (
+      ticket.title.toLowerCase().includes(searchLower) ||
+      ticket.description.toLowerCase().includes(searchLower) ||
+      ticket.id.toLowerCase().includes(searchLower) ||
+      ticket.customer.full_name.toLowerCase().includes(searchLower) ||
+      ticket.assignee?.full_name.toLowerCase().includes(searchLower)
+    )
+  })
+
+  // Filter customers based on search
+  useEffect(() => {
+    if (customers.length > 0) {
+      const filtered = customers.filter(customer =>
+        customer.full_name.toLowerCase().includes(customerSearch.toLowerCase())
+      )
+      setFilteredCustomers(filtered)
+    }
+  }, [customerSearch, customers])
+
+  // Filter support staff based on search
+  useEffect(() => {
+    if (supportStaff.length > 0) {
+      const filtered = supportStaff.filter(staff =>
+        staff.full_name.toLowerCase().includes(supportSearch.toLowerCase())
+      )
+      setFilteredSupportStaff(filtered)
+    }
+  }, [supportSearch, supportStaff])
+
   if (loading) {
     return <Text p={6}>Loading tickets...</Text>
   }
@@ -463,6 +503,21 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
       {(userRole === 'admin' || userRole === 'support') && (
         <Box p={4} bg="white" shadow="sm" mb={4}>
           <VStack spacing={4} align="stretch">
+            {/* Search for tickets */}
+            <FormControl>
+              <FormLabel>Search Tickets</FormLabel>
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <FiSearch color="gray.300" />
+                </InputLeftElement>
+                <Input
+                  placeholder="Search by title, description, ID, customer, or assignee"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </InputGroup>
+            </FormControl>
+
             <HStack spacing={4}>
               <FormControl>
                 <FormLabel>Sort by</FormLabel>
@@ -486,35 +541,62 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                 </Select>
               </FormControl>
             </HStack>
+
             {userRole === 'admin' && (
-              <HStack spacing={4}>
+              <HStack spacing={4} align="flex-start">
                 <FormControl>
                   <FormLabel>Filter by Customer</FormLabel>
-                  <Select
-                    value={filterCustomer}
-                    onChange={(e) => setFilterCustomer(e.target.value)}
-                    placeholder="All Customers"
-                  >
-                    {customers.map(customer => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.full_name}
-                      </option>
-                    ))}
-                  </Select>
+                  <VStack spacing={2} align="stretch">
+                    <InputGroup>
+                      <InputLeftElement pointerEvents="none">
+                        <FiSearch color="gray.300" />
+                      </InputLeftElement>
+                      <Input
+                        placeholder="Search customers"
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        mb={2}
+                      />
+                    </InputGroup>
+                    <Select
+                      value={filterCustomer}
+                      onChange={(e) => setFilterCustomer(e.target.value)}
+                      placeholder="All Customers"
+                    >
+                      {filteredCustomers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.full_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </VStack>
                 </FormControl>
                 <FormControl>
                   <FormLabel>Filter by Support Staff</FormLabel>
-                  <Select
-                    value={filterSupport}
-                    onChange={(e) => setFilterSupport(e.target.value)}
-                    placeholder="All Support Staff"
-                  >
-                    {supportStaff.map(staff => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.full_name}
-                      </option>
-                    ))}
-                  </Select>
+                  <VStack spacing={2} align="stretch">
+                    <InputGroup>
+                      <InputLeftElement pointerEvents="none">
+                        <FiSearch color="gray.300" />
+                      </InputLeftElement>
+                      <Input
+                        placeholder="Search support staff"
+                        value={supportSearch}
+                        onChange={(e) => setSupportSearch(e.target.value)}
+                        mb={2}
+                      />
+                    </InputGroup>
+                    <Select
+                      value={filterSupport}
+                      onChange={(e) => setFilterSupport(e.target.value)}
+                      placeholder="All Support Staff"
+                    >
+                      {filteredSupportStaff.map(staff => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.full_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </VStack>
                 </FormControl>
               </HStack>
             )}
@@ -587,7 +669,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
             </Tr>
           </Thead>
           <Tbody>
-            {tickets.map(ticket => (
+            {filteredTickets.map(ticket => (
               <Tr key={ticket.id}>
                 {(userRole === 'admin' || userRole === 'support') && (
                   <Td px={0}>
