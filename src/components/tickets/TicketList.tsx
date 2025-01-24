@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Box,
   Table,
@@ -75,6 +75,12 @@ interface SupportStaff {
 }
 
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
+  // Chakra hooks first
+  const toast = useToast()
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const textColor = useColorModeValue('gray.800', 'white')
+
+  // All useState hooks
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
@@ -85,15 +91,38 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [supportSearch, setSupportSearch] = useState('')
-  const [filteredCustomers, setFilteredCustomers] = useState<Array<{ id: string; full_name: string }>>([])
-  const [filteredSupportStaff, setFilteredSupportStaff] = useState<SupportStaff[]>([])
   const [customers, setCustomers] = useState<Array<{ id: string; full_name: string }>>([])
   const [supportStaff, setSupportStaff] = useState<SupportStaff[]>([])
-  const { isOpen, onOpen, onClose } = useDisclosure()
-  const toast = useToast()
+  const [filteredCustomers, setFilteredCustomers] = useState<Array<{ id: string; full_name: string }>>([])
+  const [filteredSupportStaff, setFilteredSupportStaff] = useState<SupportStaff[]>([])
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
 
+  // Memoized values
+  const filteredTickets = useMemo(() => {
+    if (!tickets) return []
+    
+    return tickets.filter(ticket => {
+      if (!ticket) return false
+
+      const searchLower = searchQuery.toLowerCase()
+      const customerName = ticket.customer?.full_name || ''
+      const assigneeName = ticket.assignee?.full_name || ''
+      const ticketId = ticket.id || ''
+      const title = ticket.title || ''
+      const description = ticket.description || ''
+
+      return (
+        title.toLowerCase().includes(searchLower) ||
+        description.toLowerCase().includes(searchLower) ||
+        ticketId.toLowerCase().includes(searchLower) ||
+        customerName.toLowerCase().includes(searchLower) ||
+        assigneeName.toLowerCase().includes(searchLower)
+      )
+    })
+  }, [tickets, searchQuery])
+
+  // Effects
   useEffect(() => {
     fetchTickets()
     if (userRole === 'admin') {
@@ -109,26 +138,58 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }, [userRole, sortField, sortOrder, filterCustomer, filterSupport])
 
+  useEffect(() => {
+    if (customers.length > 0) {
+      const filtered = customers.filter(customer =>
+        (customer?.full_name || '').toLowerCase().includes(customerSearch.toLowerCase())
+      )
+      setFilteredCustomers(filtered)
+    } else {
+      setFilteredCustomers([])
+    }
+  }, [customerSearch, customers])
+
+  useEffect(() => {
+    if (supportStaff.length > 0) {
+      const filtered = supportStaff.filter(staff =>
+        (staff?.full_name || '').toLowerCase().includes(supportSearch.toLowerCase())
+      )
+      setFilteredSupportStaff(filtered)
+    } else {
+      setFilteredSupportStaff([])
+    }
+  }, [supportSearch, supportStaff])
+
   async function fetchUsers() {
     try {
       // Fetch customers
-      const { data: customerData } = await supabase
+      const { data: customerData, error: customerError } = await supabase
         .from('profiles')
         .select('id, full_name')
         .eq('role', 'customer')
         .order('full_name')
 
+      if (customerError) throw customerError
+
       // Fetch support staff
-      const { data: supportData } = await supabase
+      const { data: supportData, error: supportError } = await supabase
         .from('profiles')
         .select('id, full_name')
         .eq('role', 'support')
         .order('full_name')
 
-      if (customerData) setCustomers(customerData)
-      if (supportData) setSupportStaff(supportData)
+      if (supportError) throw supportError
+
+      setCustomers(customerData?.filter(c => c && c.id && c.full_name) || [])
+      setSupportStaff(supportData?.filter(s => s && s.id && s.full_name) || [])
     } catch (error) {
       console.error('Error fetching users:', error)
+      toast({
+        title: 'Error fetching users',
+        description: 'Could not load users list',
+        status: 'error',
+        duration: 3000,
+      })
     }
   }
 
@@ -255,12 +316,12 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
           email: emailMap.get(ticket.customer_id) || 'N/A',
           full_name: ticket.customer?.full_name || 'N/A'
         },
-        assigned_to: ticket.assigned_to,
+        assigned_to: ticket.assigned_to || null,
         assignee: ticket.assignee ? {
           id: ticket.assignee.id,
-          full_name: ticket.assignee.full_name
+          full_name: ticket.assignee.full_name || 'N/A'
         } : undefined,
-        tags: ticket.tags.map((t: any) => t.tag)
+        tags: (ticket.tags || []).map((t: any) => t.tag)
       }))
 
       setTickets(transformedTickets)
@@ -461,38 +522,6 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
       })
     }
   }
-
-  // Filter tickets based on search query
-  const filteredTickets = tickets.filter(ticket => {
-    const searchLower = searchQuery.toLowerCase()
-    return (
-      ticket.title.toLowerCase().includes(searchLower) ||
-      ticket.description.toLowerCase().includes(searchLower) ||
-      ticket.id.toLowerCase().includes(searchLower) ||
-      ticket.customer.full_name.toLowerCase().includes(searchLower) ||
-      ticket.assignee?.full_name.toLowerCase().includes(searchLower)
-    )
-  })
-
-  // Filter customers based on search
-  useEffect(() => {
-    if (customers.length > 0) {
-      const filtered = customers.filter(customer =>
-        customer.full_name.toLowerCase().includes(customerSearch.toLowerCase())
-      )
-      setFilteredCustomers(filtered)
-    }
-  }, [customerSearch, customers])
-
-  // Filter support staff based on search
-  useEffect(() => {
-    if (supportStaff.length > 0) {
-      const filtered = supportStaff.filter(staff =>
-        staff.full_name.toLowerCase().includes(supportSearch.toLowerCase())
-      )
-      setFilteredSupportStaff(filtered)
-    }
-  }, [supportSearch, supportStaff])
 
   if (loading) {
     return <Text p={6}>Loading tickets...</Text>
@@ -712,7 +741,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                       <Badge
                         key={tag.id}
                         bg={tag.color}
-                        color={useColorModeValue('gray.800', 'white')}
+                        color={textColor}
                         borderRadius="full"
                         px={2}
                         py={0.5}
