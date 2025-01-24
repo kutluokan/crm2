@@ -18,12 +18,27 @@ import {
   ModalBody,
   useDisclosure,
   IconButton,
+  Wrap,
+  WrapItem,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
+  PopoverArrow,
+  Input,
+  useColorModeValue,
 } from '@chakra-ui/react';
-import { FiEdit2 } from 'react-icons/fi';
+import { FiEdit2, FiPlus, FiX } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
 import TicketChat from '../../components/TicketChat';
 import { EditTicket } from './EditTicket';
 import { RealtimeChannel } from '@supabase/supabase-js';
+
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Ticket {
   id: string;
@@ -37,6 +52,7 @@ interface Ticket {
     full_name: string;
   };
   assigned_to: string;
+  tags: Tag[];
 }
 
 interface TicketDetailsProps {
@@ -48,12 +64,17 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#808080');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const tagPopover = useDisclosure();
 
   useEffect(() => {
     fetchTicketDetails();
     getCurrentUser();
+    fetchAvailableTags();
 
     // Set up real-time subscription
     const channel = setupTicketSubscription();
@@ -72,7 +93,6 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
 
   async function fetchTicketDetails() {
     try {
-      // First fetch the ticket with profile data
       const { data: ticketData, error: ticketError } = await supabase
         .from('tickets')
         .select(`
@@ -80,12 +100,25 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           customer:profiles!tickets_customer_id_fkey (
             id,
             full_name
+          ),
+          tags:ticket_tags(
+            tag:tags(
+              id,
+              name,
+              color
+            )
           )
         `)
         .eq('id', ticketId)
         .single();
 
       if (ticketError) throw ticketError;
+
+      // Transform the tags data structure
+      const transformedTicket = {
+        ...ticketData,
+        tags: ticketData.tags.map((t: any) => t.tag)
+      };
 
       // Then fetch the email from auth.users using RPC
       if (ticketData) {
@@ -99,12 +132,135 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           setCustomerEmail(customerUser.email);
         }
 
-        setTicket(ticketData);
+        setTicket(transformedTicket);
       }
     } catch (error) {
       console.error('Error fetching ticket details:', error);
       toast({
         title: 'Error fetching ticket details',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
+  async function fetchAvailableTags() {
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setAvailableTags(data);
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+      toast({
+        title: 'Error fetching tags',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
+  async function createTag() {
+    if (!newTagName.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('tags')
+        .insert({
+          name: newTagName.trim(),
+          color: newTagColor,
+          created_by: currentUserId
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setAvailableTags([...availableTags, data]);
+      setNewTagName('');
+      setNewTagColor('#808080');
+      
+      toast({
+        title: 'Tag created successfully',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error creating tag:', error);
+      toast({
+        title: 'Error creating tag',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
+  async function addTagToTicket(tagId: string) {
+    try {
+      const { error } = await supabase
+        .from('ticket_tags')
+        .insert({
+          ticket_id: ticketId,
+          tag_id: tagId,
+          created_by: currentUserId
+        });
+
+      if (error) throw error;
+
+      // Update local state
+      const newTag = availableTags.find(t => t.id === tagId);
+      if (newTag && ticket) {
+        setTicket({
+          ...ticket,
+          tags: [...ticket.tags, newTag]
+        });
+      }
+
+      toast({
+        title: 'Tag added successfully',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error adding tag:', error);
+      toast({
+        title: 'Error adding tag',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
+  async function removeTagFromTicket(tagId: string) {
+    try {
+      const { error } = await supabase
+        .from('ticket_tags')
+        .delete()
+        .eq('ticket_id', ticketId)
+        .eq('tag_id', tagId);
+
+      if (error) throw error;
+
+      // Update local state
+      if (ticket) {
+        setTicket({
+          ...ticket,
+          tags: ticket.tags.filter(t => t.id !== tagId)
+        });
+      }
+
+      toast({
+        title: 'Tag removed successfully',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error removing tag:', error);
+      toast({
+        title: 'Error removing tag',
         status: 'error',
         duration: 3000,
       });
@@ -236,6 +392,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   }
 
   const canEdit = userRole === 'customer' && currentUserId === ticket.customer.id;
+  const canManageTags = userRole === 'admin' || userRole === 'support';
 
   return (
     <Box height="100%" display="flex" flexDirection="column" overflow="hidden">
@@ -257,6 +414,105 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
               )}
             </HStack>
             <Text color="gray.600" mt={2}>{ticket.description}</Text>
+            
+            {/* Tags Section */}
+            <Wrap mt={2} spacing={2}>
+              {ticket.tags?.map((tag) => (
+                <WrapItem key={tag.id}>
+                  <Badge
+                    bg={tag.color}
+                    color={useColorModeValue('gray.800', 'white')}
+                    px={2}
+                    py={1}
+                    borderRadius="full"
+                  >
+                    {tag.name}
+                    {canManageTags && (
+                      <IconButton
+                        icon={<FiX />}
+                        aria-label="Remove tag"
+                        size="xs"
+                        ml={1}
+                        variant="ghost"
+                        onClick={() => removeTagFromTicket(tag.id)}
+                      />
+                    )}
+                  </Badge>
+                </WrapItem>
+              ))}
+              {canManageTags && (
+                <WrapItem>
+                  <Popover
+                    isOpen={tagPopover.isOpen}
+                    onClose={tagPopover.onClose}
+                    placement="bottom-start"
+                  >
+                    <PopoverTrigger>
+                      <IconButton
+                        icon={<FiPlus />}
+                        aria-label="Add tag"
+                        size="sm"
+                        variant="ghost"
+                        onClick={tagPopover.onOpen}
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent p={4} width="300px">
+                      <PopoverArrow />
+                      <PopoverBody>
+                        <VStack spacing={4}>
+                          <Box width="100%">
+                            <Text mb={2} fontWeight="bold">Add Existing Tag</Text>
+                            <Select
+                              placeholder="Select a tag"
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  addTagToTicket(e.target.value);
+                                  tagPopover.onClose();
+                                }
+                              }}
+                            >
+                              {availableTags
+                                .filter(tag => !ticket.tags?.some(t => t.id === tag.id))
+                                .map(tag => (
+                                  <option key={tag.id} value={tag.id}>
+                                    {tag.name}
+                                  </option>
+                                ))}
+                            </Select>
+                          </Box>
+                          <Divider />
+                          <Box width="100%">
+                            <Text mb={2} fontWeight="bold">Create New Tag</Text>
+                            <VStack spacing={2}>
+                              <Input
+                                placeholder="Tag name"
+                                value={newTagName}
+                                onChange={(e) => setNewTagName(e.target.value)}
+                              />
+                              <Input
+                                type="color"
+                                value={newTagColor}
+                                onChange={(e) => setNewTagColor(e.target.value)}
+                              />
+                              <Button
+                                width="100%"
+                                onClick={() => {
+                                  createTag();
+                                  tagPopover.onClose();
+                                }}
+                                isDisabled={!newTagName.trim()}
+                              >
+                                Create Tag
+                              </Button>
+                            </VStack>
+                          </Box>
+                        </VStack>
+                      </PopoverBody>
+                    </PopoverContent>
+                  </Popover>
+                </WrapItem>
+              )}
+            </Wrap>
           </Box>
         </HStack>
         

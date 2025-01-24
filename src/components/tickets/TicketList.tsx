@@ -26,29 +26,37 @@ import {
   ButtonGroup,
   IconButton,
   Tooltip,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
 import { TicketDetails } from './TicketDetails'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { FiCheck, FiUserPlus } from 'react-icons/fi'
 
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface Ticket {
-  id: string
-  title: string
-  description: string
-  status: string
-  priority: string
-  created_at: string
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_at: string;
   customer: {
-    id: string
-    email: string
-    full_name: string
-  }
-  assigned_to: string
+    id: string;
+    email: string;
+    full_name: string;
+  };
+  assigned_to: string;
   assignee?: {
-    id: string
-    full_name: string
-  }
+    id: string;
+    full_name: string;
+  };
+  tags: Tag[];
 }
 
 interface TicketListProps {
@@ -192,6 +200,13 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
           assignee:profiles!tickets_assigned_to_fkey (
             id,
             full_name
+          ),
+          tags:ticket_tags(
+            tag:tags(
+              id,
+              name,
+              color
+            )
           )
         `)
         .order(sortField, { ascending: sortOrder === 'asc' })
@@ -236,7 +251,8 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         assignee: ticket.assignee ? {
           id: ticket.assignee.id,
           full_name: ticket.assignee.full_name
-        } : undefined
+        } : undefined,
+        tags: ticket.tags.map((t: any) => t.tag)
       }))
 
       setTickets(transformedTickets)
@@ -549,20 +565,21 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
       <Box overflowX="auto">
         <Table variant="simple">
           <Thead>
-            {(userRole === 'admin' || userRole === 'support') && (
-              <Th px={0} width="40px">
-                <Checkbox
-                  isChecked={selectAll}
-                  onChange={handleSelectAll}
-                  colorScheme="blue"
-                />
-              </Th>
-            )}
             <Tr>
+              {(userRole === 'admin' || userRole === 'support') && (
+                <Th px={0} width="40px">
+                  <Checkbox
+                    isChecked={selectAll}
+                    onChange={handleSelectAll}
+                    colorScheme="blue"
+                  />
+                </Th>
+              )}
               <Th>ID</Th>
               <Th>Title</Th>
               <Th>Status</Th>
               <Th>Priority</Th>
+              <Th>Tags</Th>
               {userRole !== 'customer' && <Th>Customer</Th>}
               {userRole === 'admin' && <Th>Assigned To</Th>}
               <Th>Created</Th>
@@ -606,6 +623,23 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   <Badge colorScheme={getPriorityColor(ticket.priority)}>
                     {ticket.priority}
                   </Badge>
+                </Td>
+                <Td>
+                  <HStack spacing={1}>
+                    {ticket.tags?.map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        bg={tag.color}
+                        color={useColorModeValue('gray.800', 'white')}
+                        borderRadius="full"
+                        px={2}
+                        py={0.5}
+                        fontSize="xs"
+                      >
+                        {tag.name}
+                      </Badge>
+                    ))}
+                  </HStack>
                 </Td>
                 {userRole !== 'customer' && (
                   <Td>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>

@@ -39,7 +39,7 @@
 #### Advanced Ticket Features
 - [x] Internal notes system
 - [ ] Custom fields
-- [ ] Tagging system
+- [x] Tagging system
 - [ ] File attachments
 
 #### Enhanced Employee Interface
