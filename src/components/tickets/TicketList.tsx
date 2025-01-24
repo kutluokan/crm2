@@ -22,10 +22,15 @@ import {
   VStack,
   FormControl,
   FormLabel,
+  Checkbox,
+  ButtonGroup,
+  IconButton,
+  Tooltip,
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
 import { TicketDetails } from './TicketDetails'
 import { RealtimeChannel } from '@supabase/supabase-js'
+import { FiCheck, FiUserPlus } from 'react-icons/fi'
 
 interface Ticket {
   id: string
@@ -53,6 +58,11 @@ interface TicketListProps {
 type SortField = 'created_at' | 'priority' | 'status'
 type SortOrder = 'asc' | 'desc'
 
+interface SupportStaff {
+  id: string
+  full_name: string
+}
+
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,14 +72,17 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [filterCustomer, setFilterCustomer] = useState<string>('')
   const [filterSupport, setFilterSupport] = useState<string>('')
   const [customers, setCustomers] = useState<Array<{ id: string; full_name: string }>>([])
-  const [supportStaff, setSupportStaff] = useState<Array<{ id: string; full_name: string }>>([])
+  const [supportStaff, setSupportStaff] = useState<SupportStaff[]>([])
   const { isOpen, onOpen, onClose } = useDisclosure()
   const toast = useToast()
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set())
+  const [selectAll, setSelectAll] = useState(false)
 
   useEffect(() => {
     fetchTickets()
     if (userRole === 'admin') {
       fetchUsers()
+      fetchSupportStaff()
     }
     
     // Set up real-time subscription
@@ -239,6 +252,21 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }
 
+  async function fetchSupportStaff() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('role', 'support')
+        .order('full_name')
+
+      if (error) throw error
+      setSupportStaff(data || [])
+    } catch (error) {
+      console.error('Error fetching support staff:', error)
+    }
+  }
+
   async function updateTicketStatus(ticketId: string, newStatus: string) {
     try {
       const { error } = await supabase
@@ -267,6 +295,41 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }
 
+  async function updateTicketAssignment(ticketId: string, newAssigneeId: string) {
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ assigned_to: newAssigneeId || null })
+        .eq('id', ticketId)
+
+      if (error) throw error
+
+      // Update local state
+      setTickets(tickets.map(ticket =>
+        ticket.id === ticketId
+          ? {
+              ...ticket,
+              assigned_to: newAssigneeId,
+              assignee: supportStaff.find(staff => staff.id === newAssigneeId)
+            }
+          : ticket
+      ))
+
+      toast({
+        title: 'Ticket assignment updated',
+        status: 'success',
+        duration: 2000,
+      })
+    } catch (error) {
+      console.error('Error updating ticket assignment:', error)
+      toast({
+        title: 'Error updating assignment',
+        status: 'error',
+        duration: 3000,
+      })
+    }
+  }
+
   function getPriorityColor(priority: string) {
     switch (priority) {
       case 'urgent': return 'red'
@@ -280,6 +343,99 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   function handleViewDetails(ticketId: string) {
     setSelectedTicketId(ticketId)
     onOpen()
+  }
+
+  // Add new functions for bulk operations
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedTickets(new Set())
+    } else {
+      setSelectedTickets(new Set(tickets.map(ticket => ticket.id)))
+    }
+    setSelectAll(!selectAll)
+  }
+
+  const handleSelectTicket = (ticketId: string) => {
+    const newSelected = new Set(selectedTickets)
+    if (newSelected.has(ticketId)) {
+      newSelected.delete(ticketId)
+    } else {
+      newSelected.add(ticketId)
+    }
+    setSelectedTickets(newSelected)
+    setSelectAll(newSelected.size === tickets.length)
+  }
+
+  async function bulkUpdateStatus(newStatus: string) {
+    if (selectedTickets.size === 0) return
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ status: newStatus })
+        .in('id', Array.from(selectedTickets))
+
+      if (error) throw error
+
+      setTickets(tickets.map(ticket =>
+        selectedTickets.has(ticket.id) ? { ...ticket, status: newStatus } : ticket
+      ))
+
+      toast({
+        title: `Updated ${selectedTickets.size} tickets to ${newStatus}`,
+        status: 'success',
+        duration: 2000,
+      })
+
+      setSelectedTickets(new Set())
+      setSelectAll(false)
+    } catch (error) {
+      console.error('Error updating tickets:', error)
+      toast({
+        title: 'Error updating tickets',
+        status: 'error',
+        duration: 3000,
+      })
+    }
+  }
+
+  async function bulkUpdateAssignment(newAssigneeId: string) {
+    if (selectedTickets.size === 0) return
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ assigned_to: newAssigneeId || null })
+        .in('id', Array.from(selectedTickets))
+
+      if (error) throw error
+
+      setTickets(tickets.map(ticket =>
+        selectedTickets.has(ticket.id)
+          ? {
+              ...ticket,
+              assigned_to: newAssigneeId,
+              assignee: supportStaff.find(staff => staff.id === newAssigneeId)
+            }
+          : ticket
+      ))
+
+      toast({
+        title: `Assigned ${selectedTickets.size} tickets to ${newAssigneeId ? supportStaff.find(s => s.id === newAssigneeId)?.full_name : 'Unassigned'}`,
+        status: 'success',
+        duration: 2000,
+      })
+
+      setSelectedTickets(new Set())
+      setSelectAll(false)
+    } catch (error) {
+      console.error('Error updating ticket assignments:', error)
+      toast({
+        title: 'Error updating assignments',
+        status: 'error',
+        duration: 3000,
+      })
+    }
   }
 
   if (loading) {
@@ -346,6 +502,46 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                 </FormControl>
               </HStack>
             )}
+            
+            <HStack spacing={4} pt={2}>
+              <Text width="150px">
+                {selectedTickets.size} ticket{selectedTickets.size !== 1 ? 's' : ''} selected
+              </Text>
+              {selectedTickets.size > 0 && (
+                <>
+                  <ButtonGroup size="sm" isAttached variant="outline">
+                    <Select
+                      placeholder="Update Status"
+                      size="sm"
+                      onChange={(e) => bulkUpdateStatus(e.target.value)}
+                      width="150px"
+                    >
+                      <option value="open">Open</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="closed">Closed</option>
+                    </Select>
+                  </ButtonGroup>
+                  {userRole === 'admin' && (
+                    <ButtonGroup size="sm" isAttached variant="outline">
+                      <Select
+                        placeholder="Assign To"
+                        size="sm"
+                        onChange={(e) => bulkUpdateAssignment(e.target.value)}
+                        width="150px"
+                      >
+                        <option value="">Unassigned</option>
+                        {supportStaff.map(staff => (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.full_name}
+                          </option>
+                        ))}
+                      </Select>
+                    </ButtonGroup>
+                  )}
+                </>
+              )}
+            </HStack>
           </VStack>
         </Box>
       )}
@@ -353,6 +549,15 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
       <Box overflowX="auto">
         <Table variant="simple">
           <Thead>
+            {(userRole === 'admin' || userRole === 'support') && (
+              <Th px={0} width="40px">
+                <Checkbox
+                  isChecked={selectAll}
+                  onChange={handleSelectAll}
+                  colorScheme="blue"
+                />
+              </Th>
+            )}
             <Tr>
               <Th>ID</Th>
               <Th>Title</Th>
@@ -367,6 +572,15 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
           <Tbody>
             {tickets.map(ticket => (
               <Tr key={ticket.id}>
+                {(userRole === 'admin' || userRole === 'support') && (
+                  <Td px={0}>
+                    <Checkbox
+                      isChecked={selectedTickets.has(ticket.id)}
+                      onChange={() => handleSelectTicket(ticket.id)}
+                      colorScheme="blue"
+                    />
+                  </Td>
+                )}
                 <Td>#{ticket.id.slice(0, 8)}</Td>
                 <Td>{ticket.title}</Td>
                 <Td>
@@ -397,7 +611,21 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   <Td>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
                 )}
                 {userRole === 'admin' && (
-                  <Td>{ticket.assignee?.full_name || 'Unassigned'}</Td>
+                  <Td>
+                    <Select
+                      value={ticket.assigned_to || ''}
+                      onChange={(e) => updateTicketAssignment(ticket.id, e.target.value)}
+                      size="sm"
+                      width="150px"
+                    >
+                      <option value="">Unassigned</option>
+                      {supportStaff.map(staff => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.full_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Td>
                 )}
                 <Td>{new Date(ticket.created_at).toLocaleDateString()}</Td>
                 <Td>

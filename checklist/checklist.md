@@ -45,7 +45,7 @@
 #### Enhanced Employee Interface
 - [ ] Customizable queue views
 - [x] Quick response templates
-- [ ] Bulk operations
+- [x] Bulk operations
 - [x] Performance metrics
 
 #### Customer Features
