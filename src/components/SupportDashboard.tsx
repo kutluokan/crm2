@@ -43,7 +43,7 @@ export function SupportDashboard() {
   return (
     <Flex h="100vh" w="100vw" overflowY="auto" overflowX="hidden">
       <Sidebar items={sidebarItems} />
-      <Box ml="240px" w="full">
+      <Box ml="240px" w="full" px={8}>
         <Box bg="gray.50" px={8} py={4}>
           <Heading size="lg">Support Dashboard</Heading>
         </Box>
