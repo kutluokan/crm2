@@ -535,7 +535,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   return (
     <>
       <Box overflowX="auto" overflowY="auto" maxH="calc(100vh - 200px)">
-        <Table variant="simple">
+        <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
           <Thead position="sticky" top="0" zIndex="1" bg={useColorModeValue('gray.50','gray.800')}>
             <Tr>
               {(userRole === 'admin' || userRole === 'support') && (
@@ -547,14 +547,14 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   />
                 </Th>
               )}
-              <Th whiteSpace="nowrap">ID</Th>
-              <Th whiteSpace="nowrap">Title</Th>
-              <Th whiteSpace="nowrap">Status</Th>
-              <Th whiteSpace="nowrap">Priority</Th>
-              <Th whiteSpace="nowrap">Tags</Th>
-              {userRole !== 'customer' && <Th whiteSpace="nowrap">Customer</Th>}
+              <Th whiteSpace="nowrap" textAlign="left">ID</Th>
+              <Th whiteSpace="nowrap" textAlign="left">Title</Th>
+              <Th whiteSpace="nowrap" textAlign="left">Status</Th>
+              <Th whiteSpace="nowrap" textAlign="left">Priority</Th>
+              <Th whiteSpace="nowrap" textAlign="left">Tags</Th>
+              {userRole !== 'customer' && <Th whiteSpace="nowrap" textAlign="left">Customer</Th>}
               {userRole === 'admin' && (
-                <Th whiteSpace="nowrap">
+                <Th whiteSpace="nowrap" textAlign="left">
                   Assigned To
                   <Popover>
                     <PopoverTrigger>
@@ -583,7 +583,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   </Popover>
                 </Th>
               )}
-              <Th whiteSpace="nowrap" display="inline-flex" alignItems="center">
+              <Th whiteSpace="nowrap" display="inline-flex" alignItems="center" textAlign="left">
                 <Box mr="1">Created</Box>
                 <FiChevronUp
                   cursor="pointer"
@@ -601,10 +601,15 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   }}
                 />
               </Th>
-              <Th whiteSpace="nowrap">Actions</Th>
+              <Th whiteSpace="nowrap" textAlign="left">Actions</Th>
             </Tr>
           </Thead>
           <Tbody>
+            {filteredTickets.length === 0 && (
+              <Tr>
+                <Td colSpan={10} textAlign="center">No tickets found.</Td>
+              </Tr>
+            )}
             {filteredTickets.map(ticket => (
               <Tr key={ticket.id}>
                 {(userRole === 'admin' || userRole === 'support') && (
@@ -616,9 +621,9 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                     />
                   </Td>
                 )}
-                <Td>#{ticket.id.slice(0, 8)}</Td>
-                <Td>{ticket.title}</Td>
-                <Td>
+                <Td textAlign="left">#{ticket.id.slice(0, 8)}</Td>
+                <Td textAlign="left">{ticket.title}</Td>
+                <Td textAlign="left">
                   {userRole === 'customer' ? (
                     <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
                       {ticket.status}
@@ -637,12 +642,12 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                     </Select>
                   )}
                 </Td>
-                <Td>
+                <Td textAlign="left">
                   <Badge colorScheme={getPriorityColor(ticket.priority)}>
                     {ticket.priority}
                   </Badge>
                 </Td>
-                <Td>
+                <Td textAlign="left">
                   <HStack spacing={1}>
                     {ticket.tags?.map((tag) => (
                       <Badge
@@ -660,10 +665,10 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   </HStack>
                 </Td>
                 {userRole !== 'customer' && (
-                  <Td>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
+                  <Td textAlign="left">{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
                 )}
                 {userRole === 'admin' && (
-                  <Td>
+                  <Td textAlign="left">
                     <Select
                       value={ticket.assigned_to || ''}
                       onChange={(e) => updateTicketAssignment(ticket.id, e.target.value)}
@@ -679,8 +684,8 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                     </Select>
                   </Td>
                 )}
-                <Td>{new Date(ticket.created_at).toLocaleDateString()}</Td>
-                <Td>
+                <Td textAlign="left">{new Date(ticket.created_at).toLocaleDateString()}</Td>
+                <Td textAlign="left">
                   <Button
                     size="sm"
                     colorScheme="blue"
