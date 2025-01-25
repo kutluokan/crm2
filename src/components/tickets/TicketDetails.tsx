@@ -28,8 +28,16 @@ import {
   PopoverArrow,
   Input,
   useColorModeValue,
+  FormControl,
+  FormLabel,
+  Switch,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuGroup,
+  MenuItem,
 } from '@chakra-ui/react';
-import { FiEdit2, FiPlus, FiX } from 'react-icons/fi';
+import { FiEdit2, FiPlus, FiX, FiChevronDown } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
 import TicketChat from '../TicketChat';
 import { EditTicket } from './EditTicket';
@@ -62,6 +70,13 @@ interface Ticket {
   tags: Tag[];
 }
 
+interface Template {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+}
+
 interface TicketDetailsProps {
   ticketId: string;
   userRole: 'admin' | 'support' | 'customer';
@@ -81,11 +96,15 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const editDisclosure = useDisclosure();
   const tagDisclosure = useDisclosure();
   const colorModeValue = useColorModeValue('gray.800', 'white');
+  const [newMessage, setNewMessage] = useState('');
+  const [isInternal, setIsInternal] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
 
   useEffect(() => {
     fetchTicketDetails();
     getCurrentUser();
     fetchAvailableTags();
+    fetchTemplates();
 
     const channel = setupTicketSubscription();
     
@@ -213,7 +232,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       const { error } = await supabase
         .from('ticket_tags')
         .insert({
-          ticket_id: ticketId,
+          ticket_id: effectiveTicketId,
           tag_id: tagId,
           created_by: currentUserId
         });
@@ -249,7 +268,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       const { error } = await supabase
         .from('ticket_tags')
         .delete()
-        .eq('ticket_id', ticketId)
+        .eq('ticket_id', effectiveTicketId)
         .eq('tag_id', tagId);
 
       if (error) throw error;
@@ -397,6 +416,59 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     }
   }
 
+  async function fetchTemplates() {
+    if (userRole === 'customer') return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('response_templates')
+        .select('*')
+        .or(`created_by.eq.${currentUserId},is_global.eq.true`)
+        .order('category')
+        .order('title');
+
+      if (error) throw error;
+      setTemplates(data || []);
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  }
+
+  function insertTemplate(content: string) {
+    setNewMessage(prev => {
+      const hasText = prev.trim().length > 0;
+      return hasText ? `${prev}\n\n${content}` : content;
+    });
+  }
+
+  async function sendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    try {
+      const { error } = await supabase
+        .from('ticket_messages')
+        .insert([
+          {
+            ticket_id: effectiveTicketId,
+            user_id: currentUserId,
+            message: newMessage.trim(),
+            is_internal: isInternal,
+          },
+        ]);
+
+      if (error) throw error;
+      setNewMessage('');
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: 'Error sending message',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  }
+
   if (!ticket) {
     return <Box p={6}>Loading ticket details...</Box>;
   }
@@ -416,218 +488,112 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         top="0"
         left="240px"
         right="300px"
+        height="80px"
         width="calc(100% - 540px)"
         zIndex="10"
-        display="flex"
-        flexDirection="column"
       >
-        <HStack justify="space-between" align="flex-start" mb={2}>
-          <Box flex="1">
-            <HStack>
-              <Heading size="lg">{ticket.title}</Heading>
-              {canEdit && (
-                <IconButton
-                  icon={<FiEdit2 />}
-                  aria-label="Edit ticket"
-                  size="sm"
-                  colorScheme="blue"
-                  variant="ghost"
-                  onClick={editDisclosure.onOpen}
-                />
-              )}
-            </HStack>
-
-            <Box mt={4}>
-              <Heading size="md">Conversation</Heading>
-            </Box>
-
-            {/* Tags Section */}
-            <Wrap mt={2} spacing={2}>
-              {ticket.tags?.map((tag) => (
-                <WrapItem key={tag.id}>
-                  <Badge
-                    bg={tag.color}
-                    color={colorModeValue}
-                    px={2}
-                    py={1}
-                    borderRadius="full"
-                  >
-                    {tag.name}
-                    {canManageTags && (
-                      <IconButton
-                        icon={<FiX />}
-                        aria-label="Remove tag"
-                        size="xs"
-                        ml={1}
-                        variant="ghost"
-                        onClick={() => removeTagFromTicket(tag.id)}
-                      />
-                    )}
-                  </Badge>
-                </WrapItem>
-              ))}
-              {canManageTags && (
-                <WrapItem>
-                  <Popover
-                    isOpen={tagDisclosure.isOpen}
-                    onClose={tagDisclosure.onClose}
-                    placement="bottom-start"
-                  >
-                    <PopoverTrigger>
-                      <IconButton
-                        icon={<FiPlus />}
-                        aria-label="Add tag"
-                        size="sm"
-                        variant="ghost"
-                        onClick={tagDisclosure.onOpen}
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent p={4} width="300px">
-                      <PopoverArrow />
-                      <PopoverBody>
-                        <VStack spacing={4}>
-                          <Box width="100%">
-                            <Text mb={2} fontWeight="bold">Add Existing Tag</Text>
-                            <Select
-                              placeholder="Select a tag"
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  addTagToTicket(e.target.value);
-                                  tagDisclosure.onClose();
-                                }
-                              }}
-                            >
-                              {availableTags
-                                .filter(tag => !ticket.tags?.some(t => t.id === tag.id))
-                                .map(tag => (
-                                  <option key={tag.id} value={tag.id}>
-                                    {tag.name}
-                                  </option>
-                                ))}
-                            </Select>
-                          </Box>
-                          <Divider />
-                          <Box width="100%">
-                            <Text mb={2} fontWeight="bold">Create New Tag</Text>
-                            <VStack spacing={2}>
-                              <Input
-                                placeholder="Tag name"
-                                value={newTagName}
-                                onChange={(e) => setNewTagName(e.target.value)}
-                              />
-                              <Input
-                                type="color"
-                                value={newTagColor}
-                                onChange={(e) => setNewTagColor(e.target.value)}
-                              />
-                              <Button
-                                width="100%"
-                                onClick={() => {
-                                  createTag();
-                                  tagDisclosure.onClose();
-                                }}
-                                isDisabled={!newTagName.trim()}
-                              >
-                                Create Tag
-                              </Button>
-                            </VStack>
-                          </Box>
-                        </VStack>
-                      </PopoverBody>
-                    </PopoverContent>
-                  </Popover>
-                </WrapItem>
-              )}
-            </Wrap>
-          </Box>
+        <HStack>
+          <Heading size="lg">{ticket.title}</Heading>
+          {canEdit && (
+            <IconButton
+              icon={<FiEdit2 />}
+              aria-label="Edit ticket"
+              size="sm"
+              colorScheme="blue"
+              variant="ghost"
+              onClick={editDisclosure.onOpen}
+            />
+          )}
         </HStack>
-        
-        <HStack spacing={4} mb={4} mt={4}>
-          <HStack>
-            <Text fontWeight="bold">Status:</Text>
-            {userRole === 'customer' ? (
-              <HStack>
-                <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
-                  {ticket.status}
-                </Badge>
-                {ticket.status !== 'closed' && canEdit && (
-                  <Button
-                    size="xs"
-                    colorScheme="red"
-                    variant="outline"
-                    onClick={handleCustomerCloseTicket}
-                  >
-                    Close Ticket
-                  </Button>
-                )}
-              </HStack>
-            ) : (
-              <Select
-                value={ticket.status}
-                onChange={(e) => updateTicketStatus(e.target.value)}
-                size="sm"
-                width="150px"
-              >
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </Select>
-            )}
-          </HStack>
-          
-          <HStack>
-            <Text fontWeight="bold">Priority:</Text>
-            {userRole === 'customer' ? (
-              <Badge colorScheme={getPriorityColor(ticket.priority)}>
-                {ticket.priority}
-              </Badge>
-            ) : (
-              <Select
-                value={ticket.priority}
-                onChange={(e) => updateTicketPriority(e.target.value)}
-                size="sm"
-                width="150px"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </Select>
-            )}
-          </HStack>
-          
-          <HStack>
-            <Text fontWeight="bold">Created:</Text>
-            <Text>{new Date(ticket.created_at).toLocaleDateString()}</Text>
-          </HStack>
-        </HStack>
-
-        {userRole !== 'customer' && (
-          <HStack>
-            <Text fontWeight="bold">Customer:</Text>
-            <Text>{ticket.customer?.full_name || 'N/A'} ({customerEmail || 'N/A'})</Text>
-          </HStack>
-        )}
       </Box>
 
-      {/* Chat Section */}
+      {/* Main Content Area */}
       <Box
-        flex="1"
+        position="fixed"
+        top="80px"
+        bottom="100px"
+        left="240px"
+        right="300px"
+        width="calc(100% - 540px)"
+        overflowY="hidden"
         display="flex"
         flexDirection="column"
-        position="relative"
-        mt="24"
-        overflow="hidden"
-        mr="300px"
+        pt={4}
       >
-        <Box flex="1" overflow="auto">
-          <TicketChat
-            ticketId={effectiveTicketId}
-            currentUserId={currentUserId}
-            isSupport={userRole !== 'customer'}
-          />
-        </Box>
+        <TicketChat
+          ticketId={effectiveTicketId}
+          currentUserId={currentUserId}
+          isSupport={userRole !== 'customer'}
+        />
+      </Box>
+
+      {/* Fixed Footer for Message Input */}
+      <Box
+        p={4}
+        bg="white"
+        borderTop="1px"
+        borderColor="gray.200"
+        position="fixed"
+        bottom="0"
+        left="240px"
+        right="300px"
+        height="100px"
+        width="calc(100% - 540px)"
+        zIndex="10"
+      >
+        <form onSubmit={sendMessage}>
+          <VStack spacing={4}>
+            {userRole !== 'customer' && (
+              <FormControl display="flex" alignItems="center">
+                <FormLabel htmlFor="internal-note" mb="0">
+                  Internal Note
+                </FormLabel>
+                <Switch
+                  id="internal-note"
+                  isChecked={isInternal}
+                  onChange={(e) => setIsInternal(e.target.checked)}
+                />
+              </FormControl>
+            )}
+            <HStack w="100%">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder={isInternal ? "Add an internal note..." : "Type a message..."}
+                bg="white"
+              />
+              {userRole !== 'customer' && templates.length > 0 && (
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    icon={<FiChevronDown />}
+                    variant="outline"
+                    aria-label="Templates"
+                  />
+                  <MenuList>
+                    {Array.from(new Set(templates.map(t => t.category))).map(category => (
+                      <MenuGroup key={category} title={category.charAt(0).toUpperCase() + category.slice(1)}>
+                        {templates
+                          .filter(t => t.category === category)
+                          .map(template => (
+                            <MenuItem
+                              key={template.id}
+                              onClick={() => insertTemplate(template.content)}
+                            >
+                              {template.title}
+                            </MenuItem>
+                          ))}
+                      </MenuGroup>
+                    ))}
+                  </MenuList>
+                </Menu>
+              )}
+              <Button type="submit" colorScheme="blue">
+                Send
+              </Button>
+            </HStack>
+          </VStack>
+        </form>
       </Box>
 
       {/* Right Sidebar */}

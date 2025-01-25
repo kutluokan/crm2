@@ -41,31 +41,16 @@ interface TicketChatProps {
   isSupport: boolean;
 }
 
-interface Template {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-}
-
-export default function TicketChat(props: TicketChatProps) {
-  const { ticketId: paramTicketId } = useParams();
-  const ticketId = props.ticketId || paramTicketId;
-  const { currentUserId, isSupport } = props;
-
+export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isInternal, setIsInternal] = useState(false);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadMessages();
-    setupMessagesSubscription();
-    if (isSupport) {
-      fetchTemplates();
-    }
+    const subscription = setupMessagesSubscription();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [ticketId]);
 
   useEffect(() => {
@@ -74,6 +59,24 @@ export default function TicketChat(props: TicketChatProps) {
 
   function scrollToBottom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function setupMessagesSubscription() {
+    return supabase
+      .channel(`ticket-messages-${ticketId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ticket_messages',
+          filter: `ticket_id=eq.${ticketId}`,
+        },
+        () => {
+          loadMessages();
+        }
+      )
+      .subscribe();
   }
 
   async function loadMessages() {
@@ -117,175 +120,66 @@ export default function TicketChat(props: TicketChatProps) {
     }
   }
 
-  async function fetchTemplates() {
-    try {
-      const { data, error } = await supabase
-        .from('response_templates')
-        .select('*')
-        .or(`created_by.eq.${currentUserId},is_global.eq.true`)
-        .order('category')
-        .order('title');
-
-      if (error) throw error;
-      setTemplates(data || []);
-    } catch (error) {
-      console.error('Error fetching templates:', error);
-    }
-  }
-
-  function insertTemplate(content: string) {
-    setNewMessage(prev => {
-      const hasText = prev.trim().length > 0;
-      return hasText ? `${prev}\n\n${content}` : content;
-    });
-  }
-
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-
-    try {
-      const { error } = await supabase
-        .from('ticket_messages')
-        .insert([
-          {
-            ticket_id: ticketId,
-            user_id: currentUserId,
-            message: newMessage.trim(),
-            is_internal: isInternal,
-          },
-        ]);
-
-      if (error) throw error;
-      setNewMessage('');
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
-  };
-
-  function setupMessagesSubscription() {
-    const channel = supabase
-      .channel('ticket-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'ticket_messages',
-          filter: `ticket_id=eq.${ticketId}`,
-        },
-        () => {
-          loadMessages();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }
-
   return (
-    <Box h="100%" display="flex" flexDirection="column">
+    <Box height="100%" display="flex" flexDirection="column">
       <Box
-        ref={chatContainerRef}
         flex="1"
         overflowY="auto"
         p={4}
         bg="gray.50"
       >
-        <VStack spacing={4} align="stretch">
+        <VStack spacing={4} align="stretch" pt={2}>
           {messages.map((message) => (
             <Box
               key={message.id}
-              bg={message.is_internal ? 'yellow.100' : 'white'}
-              p={3}
-              borderRadius="md"
+              alignSelf={message.user_id === currentUserId ? 'flex-end' : 'flex-start'}
+              maxWidth="85%"
+              minWidth="50%"
+              ml={message.user_id === currentUserId ? 'auto' : '0'}
+              mr={message.user_id === currentUserId ? '0' : 'auto'}
+              bg={message.is_internal 
+                ? 'yellow.100'
+                : message.user_id === currentUserId 
+                  ? 'green.100' 
+                  : 'blue.100'
+              }
+              p={4}
+              borderRadius="lg"
               boxShadow="sm"
               borderLeft={message.is_internal ? '4px solid orange' : undefined}
             >
-              <HStack spacing={2} mb={2}>
-                <Avatar size="sm" name={message.user?.full_name} />
-                <Text fontWeight="bold">{message.user?.full_name}</Text>
-                <Text fontSize="sm" color="gray.500">
-                  {new Date(message.created_at).toLocaleString()}
-                </Text>
-                {message.is_internal && (
-                  <Badge colorScheme="orange">Internal Note</Badge>
+              <HStack 
+                spacing={2} 
+                mb={2}
+                justify="flex-start"
+              >
+                {message.user_id !== currentUserId && (
+                  <Avatar size="sm" name={message.user?.full_name} />
+                )}
+                <VStack spacing={0} align="flex-start">
+                  <Text fontSize="sm" fontWeight="bold">
+                    {message.user?.full_name}
+                  </Text>
+                  <Text fontSize="xs" color="gray.500">
+                    {new Date(message.created_at).toLocaleString()}
+                  </Text>
+                </VStack>
+                {message.user_id === currentUserId && (
+                  <Avatar size="sm" name={message.user?.full_name} />
                 )}
               </HStack>
-              <Text whiteSpace="pre-wrap">{message.message}</Text>
+              <Box>
+                <Text whiteSpace="pre-wrap" textAlign="left">
+                  {message.message}
+                </Text>
+              </Box>
+              {message.is_internal && (
+                <Badge colorScheme="orange" mt={2}>Internal Note</Badge>
+              )}
             </Box>
           ))}
           <div ref={messagesEndRef} />
         </VStack>
-      </Box>
-
-      <Box
-        p={4}
-        bg="white"
-        borderTop="1px"
-        borderColor="gray.200"
-        position="fixed"
-        bottom="0"
-        left="240px"
-        right="300px"
-        width="calc(100% - 540px)"
-        zIndex="10"
-      >
-        <form onSubmit={sendMessage}>
-          <VStack spacing={4}>
-            {isSupport && (
-              <FormControl display="flex" alignItems="center">
-                <FormLabel htmlFor="internal-note" mb="0">
-                  Internal Note
-                </FormLabel>
-                <Switch
-                  id="internal-note"
-                  isChecked={isInternal}
-                  onChange={(e) => setIsInternal(e.target.checked)}
-                />
-              </FormControl>
-            )}
-            <HStack w="100%">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={isInternal ? "Add an internal note..." : "Type a message..."}
-                bg="white"
-              />
-              {isSupport && templates.length > 0 && (
-                <Menu>
-                  <MenuButton
-                    as={IconButton}
-                    icon={<FiChevronDown />}
-                    variant="outline"
-                    aria-label="Templates"
-                  />
-                  <MenuList>
-                    {Array.from(new Set(templates.map(t => t.category))).map(category => (
-                      <MenuGroup key={category} title={category.charAt(0).toUpperCase() + category.slice(1)}>
-                        {templates
-                          .filter(t => t.category === category)
-                          .map(template => (
-                            <MenuItem
-                              key={template.id}
-                              onClick={() => insertTemplate(template.content)}
-                            >
-                              {template.title}
-                            </MenuItem>
-                          ))}
-                      </MenuGroup>
-                    ))}
-                  </MenuList>
-                </Menu>
-              )}
-              <Button type="submit" colorScheme="blue">
-                Send
-              </Button>
-            </HStack>
-          </VStack>
-        </form>
       </Box>
     </Box>
   );
