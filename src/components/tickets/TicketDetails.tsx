@@ -510,16 +510,18 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         left="240px"
         right="0"
         display="flex"
-        overflow="hidden"
+        overflow="auto"
         pt={4}
         zIndex={10}
       >
-        <Box flex="1" display="flex" flexDirection="column" overflowY="hidden">
-          <TicketChat
-            ticketId={effectiveTicketId}
-            currentUserId={currentUserId}
-            isSupport={userRole !== 'customer'}
-          />
+        <Box flex="1" display="flex" flexDirection="column">
+          <Box flex="1" overflowY="auto" pb="32">
+            <TicketChat
+              ticketId={effectiveTicketId}
+              currentUserId={currentUserId}
+              isSupport={userRole !== 'customer'}
+            />
+          </Box>
           {/* Footer for Message Input */}
           <Box
             p={4}
@@ -528,6 +530,8 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
             borderColor="gray.200"
             position="sticky"
             bottom="0"
+            zIndex="999"
+            width="100%"
           >
             <form onSubmit={sendMessage}>
               <VStack spacing={4}>
