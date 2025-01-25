@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext, useMemo, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Box,
@@ -77,21 +77,21 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#808080');
   const toast = useToast();
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const tagPopover = useDisclosure();
+  const editDisclosure = useDisclosure();
+  const tagDisclosure = useDisclosure();
+  const colorModeValue = useColorModeValue('gray.800', 'white');
 
   useEffect(() => {
     fetchTicketDetails();
     getCurrentUser();
     fetchAvailableTags();
 
-    // Set up real-time subscription
     const channel = setupTicketSubscription();
     
     return () => {
       channel.unsubscribe();
     }
-  }, [ticketId]);
+  }, [effectiveTicketId]);
 
   async function getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -431,7 +431,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
                   size="sm"
                   colorScheme="blue"
                   variant="ghost"
-                  onClick={onOpen}
+                  onClick={editDisclosure.onOpen}
                 />
               )}
             </HStack>
@@ -446,7 +446,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
                 <WrapItem key={tag.id}>
                   <Badge
                     bg={tag.color}
-                    color={useColorModeValue('gray.800', 'white')}
+                    color={colorModeValue}
                     px={2}
                     py={1}
                     borderRadius="full"
@@ -468,8 +468,8 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
               {canManageTags && (
                 <WrapItem>
                   <Popover
-                    isOpen={tagPopover.isOpen}
-                    onClose={tagPopover.onClose}
+                    isOpen={tagDisclosure.isOpen}
+                    onClose={tagDisclosure.onClose}
                     placement="bottom-start"
                   >
                     <PopoverTrigger>
@@ -478,7 +478,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
                         aria-label="Add tag"
                         size="sm"
                         variant="ghost"
-                        onClick={tagPopover.onOpen}
+                        onClick={tagDisclosure.onOpen}
                       />
                     </PopoverTrigger>
                     <PopoverContent p={4} width="300px">
@@ -492,7 +492,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
                               onChange={(e) => {
                                 if (e.target.value) {
                                   addTagToTicket(e.target.value);
-                                  tagPopover.onClose();
+                                  tagDisclosure.onClose();
                                 }
                               }}
                             >
@@ -523,7 +523,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
                                 width="100%"
                                 onClick={() => {
                                   createTag();
-                                  tagPopover.onClose();
+                                  tagDisclosure.onClose();
                                 }}
                                 isDisabled={!newTagName.trim()}
                               >
@@ -619,10 +619,9 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         mt="24"
         overflow="hidden"
       >
-        
         <Box flex="1" overflow="auto">
           <TicketChat
-            ticketId={ticketId}
+            ticketId={effectiveTicketId}
             currentUserId={currentUserId}
             isSupport={userRole !== 'customer'}
           />
@@ -630,7 +629,11 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       </Box>
 
       {/* Edit Ticket Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+      <Modal 
+        isOpen={editDisclosure.isOpen} 
+        onClose={editDisclosure.onClose} 
+        size="xl"
+      >
         <ModalOverlay />
         <ModalContent maxW="800px">
           <ModalHeader>Edit Ticket</ModalHeader>
@@ -638,7 +641,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           <ModalBody pb={6}>
             <EditTicket
               ticket={ticket}
-              onClose={onClose}
+              onClose={editDisclosure.onClose}
               onUpdate={fetchTicketDetails}
             />
           </ModalBody>
