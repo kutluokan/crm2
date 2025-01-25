@@ -105,8 +105,10 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   // Chakra hooks first
   const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclosure()
+  const { isOpen: isOpenDetails, onOpen: onOpenDetails, onClose: onCloseDetails } = useDisclosure()
   const textColor = useColorModeValue('gray.800', 'white')
-
+  const theadBg = useColorModeValue('gray.50', 'gray.800')
+  
   // All useState hooks
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,6 +121,17 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [supportSearch, setSupportSearch] = useState('')
+  const [titleFilterInput, setTitleFilterInput] = useState('')
+  const [filterTitle, setFilterTitle] = useState('')
+  // New state for ID, Status, Priority, and Tags
+  const [idFilterInput, setIdFilterInput] = useState('')
+  const [filterID, setFilterID] = useState('')
+  const [statusFilterInput, setStatusFilterInput] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [priorityFilterInput, setPriorityFilterInput] = useState('')
+  const [filterPriority, setFilterPriority] = useState('')
+  const [tagsFilterInput, setTagsFilterInput] = useState('')
+  const [filterTags, setFilterTags] = useState('')
   const [customers, setCustomers] = useState<Array<{ id: string; full_name: string }>>([])
   const [supportStaff, setSupportStaff] = useState<SupportStaff[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<Array<{ id: string; full_name: string }>>([])
@@ -140,7 +153,27 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
       const title = ticket.title || ''
       const description = ticket.description || ''
 
+      // ID filter
+      if (filterID.trim() && !ticketId.toLowerCase().includes(filterID.toLowerCase())) {
+        return false
+      }
+      // Status filter
+      if (filterStatus.trim() && !ticket.status.toLowerCase().includes(filterStatus.toLowerCase())) {
+        return false
+      }
+      // Priority filter
+      if (filterPriority.trim() && !ticket.priority.toLowerCase().includes(filterPriority.toLowerCase())) {
+        return false
+      }
+      // Tags filter
+      if (filterTags.trim()) {
+        const matchTags = ticket.tags.some(t => t.name.toLowerCase().includes(filterTags.toLowerCase()))
+        if (!matchTags) return false
+      }
       if (filterSupport.trim() && !assigneeName.toLowerCase().includes(filterSupport.toLowerCase())) {
+        return false
+      }
+      if (filterTitle.trim() && !title.toLowerCase().includes(filterTitle.toLowerCase())) {
         return false
       }
       return (
@@ -151,7 +184,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         assigneeName.toLowerCase().includes(searchLower)
       )
     })
-  }, [tickets, searchQuery, filterSupport])
+  }, [tickets, searchQuery, filterID, filterStatus, filterPriority, filterTags, filterSupport, filterTitle])
 
   // Effects
   useEffect(() => {
@@ -432,7 +465,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
 
   function handleViewDetails(ticketId: string) {
     setSelectedTicketId(ticketId)
-    onOpen()
+    onOpenDetails()
   }
 
   // Add new functions for bulk operations
@@ -535,8 +568,8 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   return (
     <>
       <Box overflowX="auto" overflowY="auto" maxH="calc(100vh - 200px)">
-        <Table variant="simple" style={{ tableLayout: 'fixed', width: '100%' }}>
-          <Thead position="sticky" top="0" zIndex="1" bg={useColorModeValue('gray.50','gray.800')}>
+        <Table variant="simple" style={{ tableLayout: 'auto', width: '100%' }} className="ticket-table">
+          <Thead position="sticky" top="0" zIndex="1" bg={theadBg}>
             <Tr>
               {(userRole === 'admin' || userRole === 'support') && (
                 <Th px={0} width="40px">
@@ -547,11 +580,154 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   />
                 </Th>
               )}
-              <Th whiteSpace="nowrap" textAlign="left">ID</Th>
-              <Th whiteSpace="nowrap" textAlign="left">Title</Th>
-              <Th whiteSpace="nowrap" textAlign="left">Status</Th>
-              <Th whiteSpace="nowrap" textAlign="left">Priority</Th>
-              <Th whiteSpace="nowrap" textAlign="left">Tags</Th>
+              <Th whiteSpace="nowrap" textAlign="left">
+                ID
+                <Popover>
+                  <PopoverTrigger>
+                    <IconButton
+                      icon={<FiSearch />}
+                      aria-label="Filter ID"
+                      size="xs"
+                      ml={2}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <PopoverArrow />
+                    <PopoverBody>
+                      <Input
+                        size="xs"
+                        placeholder="Search ID..."
+                        value={idFilterInput}
+                        onChange={(e) => {
+                          setIdFilterInput(e.target.value)
+                          setFilterID(e.target.value.trim())
+                        }}
+                        width="120px"
+                      />
+                    </PopoverBody>
+                  </PopoverContent>
+                </Popover>
+              </Th>
+              <Th whiteSpace="nowrap" textAlign="left">
+                Title
+                <Popover>
+                  <PopoverTrigger>
+                    <IconButton
+                      icon={<FiSearch />}
+                      aria-label="Filter title"
+                      size="xs"
+                      ml={2}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <PopoverArrow />
+                    <PopoverBody>
+                      <Input
+                        size="xs"
+                        placeholder="Search Title..."
+                        value={titleFilterInput}
+                        onChange={(e) => {
+                          setTitleFilterInput(e.target.value)
+                          setFilterTitle(e.target.value.trim())
+                        }}
+                        width="120px"
+                      />
+                    </PopoverBody>
+                  </PopoverContent>
+                </Popover>
+              </Th>
+              <Th whiteSpace="nowrap" textAlign="left">
+                Status
+                <Popover>
+                  <PopoverTrigger>
+                    <IconButton
+                      icon={<FiSearch />}
+                      aria-label="Filter Status"
+                      size="xs"
+                      ml={2}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <PopoverArrow />
+                    <PopoverBody>
+                      <Select
+                        placeholder="All"
+                        size="xs"
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        width="150px"
+                        display="block"
+                      >
+                        <option value="">All</option>
+                        <option value="open">Open</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                      </Select>
+                    </PopoverBody>
+                  </PopoverContent>
+                </Popover>
+              </Th>
+              <Th whiteSpace="nowrap" textAlign="left">
+                Priority
+                <Popover>
+                  <PopoverTrigger>
+                    <IconButton
+                      icon={<FiSearch />}
+                      aria-label="Filter Priority"
+                      size="xs"
+                      ml={2}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <PopoverArrow />
+                    <PopoverBody>
+                      <Select
+                        placeholder="All"
+                        size="xs"
+                        value={filterPriority}
+                        onChange={(e) => setFilterPriority(e.target.value)}
+                        width="150px"
+                        display="block"
+                      >
+                        <option value="">All</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </Select>
+                    </PopoverBody>
+                  </PopoverContent>
+                </Popover>
+              </Th>
+              <Th whiteSpace="nowrap" textAlign="left">
+                Tags
+                <Popover>
+                  <PopoverTrigger>
+                    <IconButton
+                      icon={<FiSearch />}
+                      aria-label="Filter Tags"
+                      size="xs"
+                      ml={2}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    <PopoverArrow />
+                    <PopoverBody>
+                      <Input
+                        size="xs"
+                        placeholder="Search Tags..."
+                        value={tagsFilterInput}
+                        onChange={(e) => {
+                          setTagsFilterInput(e.target.value)
+                          setFilterTags(e.target.value.trim())
+                        }}
+                        width="120px"
+                      />
+                    </PopoverBody>
+                  </PopoverContent>
+                </Popover>
+              </Th>
               {userRole !== 'customer' && <Th whiteSpace="nowrap" textAlign="left">Customer</Th>}
               {userRole === 'admin' && (
                 <Th whiteSpace="nowrap" textAlign="left">
@@ -613,7 +789,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
             {filteredTickets.map(ticket => (
               <Tr key={ticket.id}>
                 {(userRole === 'admin' || userRole === 'support') && (
-                  <Td px={0}>
+                  <Td px={2} py={3}>
                     <Checkbox
                       isChecked={selectedTickets.has(ticket.id)}
                       onChange={() => handleSelectTicket(ticket.id)}
@@ -621,9 +797,9 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                     />
                   </Td>
                 )}
-                <Td textAlign="left">#{ticket.id.slice(0, 8)}</Td>
-                <Td textAlign="left">{ticket.title}</Td>
-                <Td textAlign="left">
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>#{ticket.id.slice(0, 8)}</Td>
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>{ticket.title}</Td>
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>
                   {userRole === 'customer' ? (
                     <Badge colorScheme={ticket.status === 'open' ? 'red' : ticket.status === 'in_progress' ? 'yellow' : 'green'}>
                       {ticket.status}
@@ -642,12 +818,12 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                     </Select>
                   )}
                 </Td>
-                <Td textAlign="left">
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>
                   <Badge colorScheme={getPriorityColor(ticket.priority)}>
                     {ticket.priority}
                   </Badge>
                 </Td>
-                <Td textAlign="left">
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>
                   <HStack spacing={1}>
                     {ticket.tags?.map((tag) => (
                       <Badge
@@ -665,10 +841,10 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   </HStack>
                 </Td>
                 {userRole !== 'customer' && (
-                  <Td textAlign="left">{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
+                  <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>{ticket.customer?.full_name || ticket.customer?.email || 'N/A'}</Td>
                 )}
                 {userRole === 'admin' && (
-                  <Td textAlign="left">
+                  <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>
                     <Select
                       value={ticket.assigned_to || ''}
                       onChange={(e) => updateTicketAssignment(ticket.id, e.target.value)}
@@ -684,8 +860,8 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                     </Select>
                   </Td>
                 )}
-                <Td textAlign="left">{new Date(ticket.created_at).toLocaleDateString()}</Td>
-                <Td textAlign="left">
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>{new Date(ticket.created_at).toLocaleDateString()}</Td>
+                <Td textAlign="left" whiteSpace="normal" wordBreak="break-word" maxWidth="200px" px={2} py={3}>
                   <Button
                     size="sm"
                     colorScheme="blue"
@@ -700,7 +876,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         </Table>
       </Box>
 
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+      <Modal isOpen={isOpenDetails} onClose={onCloseDetails} size="xl">
         <ModalOverlay />
         <ModalContent maxW="800px" h="90vh" my="5vh" overflow="hidden">
           <ModalCloseButton zIndex="10" />
