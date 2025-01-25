@@ -515,7 +515,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         zIndex={10}
       >
         <Box flex="1" display="flex" flexDirection="column">
-          <Box flex="1" overflowY="auto" pb="32">
+          <Box flex="1" overflowY="auto">
             <TicketChat
               ticketId={effectiveTicketId}
               currentUserId={currentUserId}
