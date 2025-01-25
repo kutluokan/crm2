@@ -482,9 +482,9 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         position="fixed"
         top="0"
         left="240px"
-        right="300px"
+        right="0"
         height="80px"
-        width="calc(100% - 540px)"
+        width="calc(100% - 240px)"
         zIndex="10"
       >
         <HStack>
@@ -502,103 +502,98 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         </HStack>
       </Box>
 
-      {/* Main Content Area */}
+      {/* Main Content + Sidebar */}
       <Box
         position="fixed"
-        top="80px"
-        bottom="100px"
+        top="0"
+        bottom="0"
         left="240px"
-        right="300px"
-        width="calc(100% - 540px)"
-        overflowY="hidden"
+        right="0"
         display="flex"
-        flexDirection="column"
+        overflow="hidden"
         pt={4}
+        zIndex={10}
       >
-        <TicketChat
-          ticketId={effectiveTicketId}
+        <Box flex="1" display="flex" flexDirection="column" overflowY="hidden">
+          <TicketChat
+            ticketId={effectiveTicketId}
+            currentUserId={currentUserId}
+            isSupport={userRole !== 'customer'}
+          />
+          {/* Footer for Message Input */}
+          <Box
+            p={4}
+            bg="white"
+            borderTop="1px"
+            borderColor="gray.200"
+            position="sticky"
+            bottom="0"
+          >
+            <form onSubmit={sendMessage}>
+              <VStack spacing={4}>
+                {userRole !== 'customer' && (
+                  <FormControl display="flex" alignItems="center">
+                    <FormLabel htmlFor="internal-note" mb="0">
+                      Internal Note
+                    </FormLabel>
+                    <Switch
+                      id="internal-note"
+                      isChecked={isInternal}
+                      onChange={(e) => setIsInternal(e.target.checked)}
+                    />
+                  </FormControl>
+                )}
+                <HStack w="100%">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder={isInternal ? "Add an internal note..." : "Type a message..."}
+                    bg="white"
+                  />
+                  {userRole !== 'customer' && templates.length > 0 && (
+                    <Menu>
+                      <MenuButton
+                        as={IconButton}
+                        icon={<FiChevronDown />}
+                        variant="outline"
+                        aria-label="Templates"
+                      />
+                      <MenuList>
+                        {Array.from(new Set(templates.map(t => t.category))).map(category => (
+                          <MenuGroup key={category} title={category.charAt(0).toUpperCase() + category.slice(1)}>
+                            {templates
+                              .filter(t => t.category === category)
+                              .map(template => (
+                                <MenuItem
+                                  key={template.id}
+                                  onClick={() => insertTemplate(template.content)}
+                                >
+                                  {template.title}
+                                </MenuItem>
+                              ))}
+                          </MenuGroup>
+                        ))}
+                      </MenuList>
+                    </Menu>
+                  )}
+                  <Button type="submit" colorScheme="blue">
+                    Send
+                  </Button>
+                </HStack>
+              </VStack>
+            </form>
+          </Box>
+        </Box>
+        <TicketInfo
+          ticket={ticket}
+          customerEmail={customerEmail}
+          userRole={userRole}
           currentUserId={currentUserId}
-          isSupport={userRole !== 'customer'}
+          onUpdate={fetchTicketDetails}
         />
       </Box>
 
-      {/* Fixed Footer for Message Input */}
-      <Box
-        p={4}
-        bg="white"
-        borderTop="1px"
-        borderColor="gray.200"
-        position="fixed"
-        bottom="0"
-        left="240px"
-        right="300px"
-        height="100px"
-        width="calc(100% - 540px)"
-        zIndex="10"
-      >
-        <form onSubmit={sendMessage}>
-          <VStack spacing={4}>
-            {userRole !== 'customer' && (
-              <FormControl display="flex" alignItems="center">
-                <FormLabel htmlFor="internal-note" mb="0">
-                  Internal Note
-                </FormLabel>
-                <Switch
-                  id="internal-note"
-                  isChecked={isInternal}
-                  onChange={(e) => setIsInternal(e.target.checked)}
-                />
-              </FormControl>
-            )}
-            <HStack w="100%">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={isInternal ? "Add an internal note..." : "Type a message..."}
-                bg="white"
-              />
-              {userRole !== 'customer' && templates.length > 0 && (
-                <Menu>
-                  <MenuButton
-                    as={IconButton}
-                    icon={<FiChevronDown />}
-                    variant="outline"
-                    aria-label="Templates"
-                  />
-                  <MenuList>
-                    {Array.from(new Set(templates.map(t => t.category))).map(category => (
-                      <MenuGroup key={category} title={category.charAt(0).toUpperCase() + category.slice(1)}>
-                        {templates
-                          .filter(t => t.category === category)
-                          .map(template => (
-                            <MenuItem
-                              key={template.id}
-                              onClick={() => insertTemplate(template.content)}
-                            >
-                              {template.title}
-                            </MenuItem>
-                          ))}
-                      </MenuGroup>
-                    ))}
-                  </MenuList>
-                </Menu>
-              )}
-              <Button type="submit" colorScheme="blue">
-                Send
-              </Button>
-            </HStack>
-          </VStack>
-        </form>
-      </Box>
 
-      {/* Right Sidebar */}
-      <TicketInfo 
-        ticket={ticket} 
-        customerEmail={customerEmail} 
-        userRole={userRole}
-        currentUserId={currentUserId}
-        onUpdate={fetchTicketDetails}
-      />
 
       {/* Edit Ticket Modal */}
       <Modal 

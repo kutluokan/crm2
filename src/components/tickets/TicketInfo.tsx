@@ -190,17 +190,18 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
   return (
     <Box
       width="300px"
-      height="100vh"
-      position="fixed"
-      right="0"
-      top="0"
+      minWidth="200px"
+      maxWidth="600px"
+      style={{ direction: 'rtl' }}
+      resize="horizontal"
+      overflowY="auto"
       bg="white"
       borderLeft="1px"
       borderColor="gray.200"
       p={4}
-      overflowY="auto"
     >
-      <VStack spacing={4} align="stretch">
+      <Box style={{ direction: 'ltr', width: '100%' }}>
+        <VStack spacing={4} align="stretch">
         <Box>
           <Heading size="sm" mb={2}>Customer Information</Heading>
           <Text fontSize="sm">Name: {ticket.customer?.full_name}</Text>
@@ -389,6 +390,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
           </Text>
         </Box>
       </VStack>
+      </Box>
     </Box>
   );
 } 
