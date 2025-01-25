@@ -46,10 +46,20 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    loadMessages();
+    let isMounted = true;
+
+    const loadMessagesIfMounted = async () => {
+      if (isMounted) {
+        await loadMessages();
+      }
+    };
+
+    loadMessagesIfMounted();
     const subscription = setupMessagesSubscription();
+
     return () => {
-      subscription.unsubscribe();
+      isMounted = false;
+      subscription?.unsubscribe();
     };
   }, [ticketId]);
 
@@ -81,26 +91,29 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
 
   async function loadMessages() {
     try {
-      // First, get the messages
-      let query = supabase
-        .from('ticket_messages')
-        .select('*, profiles(full_name)')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-
       if (!ticketId) {
         console.error('No ticket ID provided for TicketChat.');
         return;
       }
 
+      // Create a new query each time
+      const query = supabase
+        .from('ticket_messages')
+        .select('*, profiles(full_name)')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+
       // If not support/admin, filter out internal messages
       if (!isSupport) {
-        query = query.eq('is_internal', false);
+        query.eq('is_internal', false);
       }
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase query error:', error);
+        throw error;
+      }
       
       // Transform the data to ensure it matches our Message type
       const transformedMessages: Message[] = (data || []).map(msg => ({
@@ -117,6 +130,14 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       setMessages(transformedMessages);
     } catch (error) {
       console.error('Error loading messages:', error);
+      // Add more error details
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
     }
   }
 

@@ -157,6 +157,21 @@ function AppContent() {
     }
   }, [navigate])
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('Auth error:', error);
+      }
+      if (!session) {
+        // Redirect to login or handle unauthorized state
+        console.log('No active session');
+      }
+    };
+
+    checkAuth();
+  }, []);
+
   console.log('Current state -', 'Session:', !!session, 'Profile:', !!profile, 'Loading:', loading)
 
   if (loading) {

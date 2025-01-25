@@ -101,6 +101,12 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const [templates, setTemplates] = useState<Template[]>([]);
 
   useEffect(() => {
+    if (!effectiveTicketId) {
+      console.error('No ticket ID provided');
+      return;
+    }
+    
+    console.log('Using ticket ID:', effectiveTicketId);
     fetchTicketDetails();
     getCurrentUser();
     fetchAvailableTags();
@@ -124,54 +130,41 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
 
   async function fetchTicketDetails() {
     try {
-      const { data: ticketData, error: ticketError } = await supabase
+      console.log('Fetching ticket:', effectiveTicketId);
+      
+      const { data: ticket, error } = await supabase
         .from('tickets')
         .select(`
           *,
-          customer:profiles!tickets_customer_id_fkey (
-            id,
-            full_name
-          ),
+          customer:profiles!tickets_customer_id_fkey(id, full_name),
           tags:ticket_tags(
-            tag:tags(
-              id,
-              name,
-              color
-            )
+            tag:tags(id, name, color)
           )
         `)
         .eq('id', effectiveTicketId)
         .single();
 
-      if (ticketError) throw ticketError;
+      if (error) {
+        console.error('Error details:', error);
+        throw error;
+      }
+
+      if (!ticket) {
+        console.error('No ticket found with ID:', effectiveTicketId);
+        return;
+      }
 
       // Transform the tags data structure
       const transformedTicket = {
-        ...ticketData,
-        tags: ticketData.tags.map((t: any) => t.tag)
+        ...ticket,
+        tags: ticket.tags
+          ?.map(t => t.tag)
+          .filter(Boolean) || []
       };
 
-      // Then fetch the email from auth.users using RPC
-      if (ticketData) {
-        const { data: users, error: usersError } = await supabase
-          .rpc('get_users', {});
-
-        if (usersError) throw usersError;
-
-        const customerUser = users?.find((u: User) => u.id === ticketData.customer_id);
-        if (customerUser) {
-          setCustomerEmail(customerUser.email);
-        }
-
-        setTicket(transformedTicket);
-      }
+      setTicket(transformedTicket);
     } catch (error) {
       console.error('Error fetching ticket details:', error);
-      toast({
-        title: 'Error fetching ticket details',
-        status: 'error',
-        duration: 3000,
-      });
     }
   }
 

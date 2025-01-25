@@ -17,7 +17,7 @@ import {
   HStack,
   useDisclosure,
 } from '@chakra-ui/react';
-import { FiPlus, FiX } from 'react-icons/fi';
+import { FiPlus, FiX, FiRefreshCw } from 'react-icons/fi';
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Ticket } from './types';
@@ -36,6 +36,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
   const [newTagColor, setNewTagColor] = useState('#808080');
   const tagDisclosure = useDisclosure();
   const canManageTags = userRole === 'admin' || userRole === 'support';
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
   // Fetch available tags when popover opens
   const handleTagPopoverOpen = async () => {
@@ -138,6 +139,53 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
   }
 
   const canManageTicket = userRole === 'admin' || userRole === 'support';
+
+  const generateSummary = async () => {
+    setIsLoadingSummary(true);
+    try {
+      console.log('Starting summary generation for ticket:', ticket.id);
+      
+      // Log the Edge Function URL
+      console.log('Edge Function URL:', `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/summarize-ticket`);
+      
+      // Log the request details
+      const request = {
+        body: { ticketId: ticket.id },
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+      };
+      console.log('Making request to Edge Function:', request);
+
+      const { data, error } = await supabase.functions.invoke('summarize-ticket', request);
+
+      console.log('Edge Function response:', { data, error });
+
+      if (error) {
+        console.error('Function error:', error);
+        throw error;
+      }
+      
+      // Log successful update
+      console.log('Summary generated successfully:', data);
+      onUpdate();
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      // Add more detailed error logging
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', await error.response.text());
+      }
+      if (error.message) {
+        console.error('Error message:', error.message);
+      }
+      if (error.stack) {
+        console.error('Error stack:', error.stack);
+      }
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  };
 
   return (
     <Box
@@ -318,6 +366,27 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
           ) : (
             <Text fontSize="sm">No tags</Text>
           )}
+        </Box>
+
+        <Divider />
+
+        <Box>
+          <HStack justify="space-between" mb={2}>
+            <Heading size="sm">AI Summary</Heading>
+            {canManageTicket && (
+              <IconButton
+                icon={<FiRefreshCw />}
+                aria-label="Generate summary"
+                size="sm"
+                variant="ghost"
+                isLoading={isLoadingSummary}
+                onClick={generateSummary}
+              />
+            )}
+          </HStack>
+          <Text fontSize="sm" fontStyle="italic">
+            {ticket.ai_summary || 'No summary generated yet'}
+          </Text>
         </Box>
       </VStack>
     </Box>
