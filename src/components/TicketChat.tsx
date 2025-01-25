@@ -133,8 +133,9 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
             <Box
               key={message.id}
               alignSelf={message.user_id === currentUserId ? 'flex-end' : 'flex-start'}
-              maxWidth="85%"
-              minWidth="50%"
+              maxWidth={{ base: "85%", md: "50%" }}
+              minWidth="auto"
+              w="fit-content"
               ml={message.user_id === currentUserId ? 'auto' : '0'}
               mr={message.user_id === currentUserId ? '0' : 'auto'}
               bg={message.is_internal 
@@ -152,12 +153,13 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
                 spacing={2} 
                 mb={2}
                 justify="flex-start"
+                flexWrap="wrap"
               >
                 {message.user_id !== currentUserId && (
                   <Avatar size="sm" name={message.user?.full_name} />
                 )}
                 <VStack spacing={0} align="flex-start">
-                  <Text fontSize="sm" fontWeight="bold">
+                  <Text fontSize="sm" fontWeight="bold" noOfLines={1}>
                     {message.user?.full_name}
                   </Text>
                   <Text fontSize="xs" color="gray.500">
@@ -169,7 +171,11 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
                 )}
               </HStack>
               <Box>
-                <Text whiteSpace="pre-wrap" textAlign="left">
+                <Text 
+                  whiteSpace="pre-wrap" 
+                  textAlign="left"
+                  wordBreak="break-word"
+                >
                   {message.message}
                 </Text>
               </Box>

@@ -104,14 +104,16 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     fetchTicketDetails();
     getCurrentUser();
     fetchAvailableTags();
-    fetchTemplates();
+    if (currentUserId) {
+      fetchTemplates();
+    }
 
     const channel = setupTicketSubscription();
     
     return () => {
       channel.unsubscribe();
     }
-  }, [effectiveTicketId]);
+  }, [effectiveTicketId, currentUserId]);
 
   async function getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -417,7 +419,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   }
 
   async function fetchTemplates() {
-    if (userRole === 'customer') return;
+    if (userRole === 'customer' || !currentUserId) return;
     
     try {
       const { data, error } = await supabase
@@ -597,7 +599,13 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       </Box>
 
       {/* Right Sidebar */}
-      <TicketInfo ticket={ticket} customerEmail={customerEmail} />
+      <TicketInfo 
+        ticket={ticket} 
+        customerEmail={customerEmail} 
+        userRole={userRole}
+        currentUserId={currentUserId}
+        onUpdate={fetchTicketDetails}
+      />
 
       {/* Edit Ticket Modal */}
       <Modal 
