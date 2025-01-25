@@ -163,6 +163,19 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       };
 
       setTicket(transformedTicket);
+
+      // Fetch customer email using get_users function
+      if (ticket.customer?.id) {
+        const { data: userData, error: userError } = await supabase
+          .rpc('get_users');
+        
+        if (!userError && userData) {
+          const user = userData.find(u => u.id === ticket.customer.id);
+          if (user?.email) {
+            setCustomerEmail(user.email);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error fetching ticket details:', error);
     }

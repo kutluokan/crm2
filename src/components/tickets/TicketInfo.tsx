@@ -18,7 +18,7 @@ import {
   useDisclosure,
 } from '@chakra-ui/react';
 import { FiPlus, FiX, FiRefreshCw } from 'react-icons/fi';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Ticket } from './types';
 
@@ -37,6 +37,33 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
   const tagDisclosure = useDisclosure();
   const canManageTags = userRole === 'admin' || userRole === 'support';
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+  const [resolvedEmail, setResolvedEmail] = useState(customerEmail);
+
+  useEffect(() => {
+    if (!ticket.customer?.email) {
+      fetchCustomerEmail(ticket.customer?.id);
+    } else {
+      setResolvedEmail(ticket.customer.email);
+    }
+  }, [ticket]);
+
+  async function fetchCustomerEmail(customerId?: string) {
+    if (!customerId) return;
+    try {
+      const { data: userData, error } = await supabase
+        .rpc('get_users');
+      
+      if (error) throw error;
+      if (userData) {
+        const user = userData.find(u => u.id === customerId);
+        if (user?.email) {
+          setResolvedEmail(user.email);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching customer email:', error);
+    }
+  }
 
   // Fetch available tags when popover opens
   const handleTagPopoverOpen = async () => {
@@ -205,7 +232,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
         <Box>
           <Heading size="sm" mb={2}>Customer Information</Heading>
           <Text fontSize="sm">Name: {ticket.customer?.full_name}</Text>
-          <Text fontSize="sm">Email: {customerEmail}</Text>
+          <Text fontSize="sm">Email: {resolvedEmail}</Text>
         </Box>
 
         <Divider />

@@ -74,5 +74,5 @@
 - [ ] Refined Self-Service Support
 - [ ] Human-in-the-Loop Enhancements
 - [ ] Multi-Channel and Multi-Modality Support
-- [ ] AI-Summarized Ticket and System Status
+- [x] AI-Summarized Ticket and System Status
 - [ ] Learning and Growth System
