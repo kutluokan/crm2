@@ -534,9 +534,9 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
 
   return (
     <>
-      <Box overflowX="auto">
+      <Box overflowX="auto" overflowY="auto" maxH="calc(100vh - 200px)">
         <Table variant="simple">
-          <Thead>
+          <Thead position="sticky" top="0" zIndex="1" bg={useColorModeValue('gray.50','gray.800')}>
             <Tr>
               {(userRole === 'admin' || userRole === 'support') && (
                 <Th px={0} width="40px">
@@ -547,33 +547,47 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   />
                 </Th>
               )}
-              <Th>ID</Th>
-              <Th>Title</Th>
-              <Th>Status</Th>
-              <Th>Priority</Th>
-              <Th>Tags</Th>
-              {userRole !== 'customer' && <Th>Customer</Th>}
+              <Th whiteSpace="nowrap">ID</Th>
+              <Th whiteSpace="nowrap">Title</Th>
+              <Th whiteSpace="nowrap">Status</Th>
+              <Th whiteSpace="nowrap">Priority</Th>
+              <Th whiteSpace="nowrap">Tags</Th>
+              {userRole !== 'customer' && <Th whiteSpace="nowrap">Customer</Th>}
               {userRole === 'admin' && (
-                <Th display="flex" alignItems="center">
-                  <Box mr="2">Assigned To</Box>
-                  <Input
-                    size="xs"
-                    placeholder="Type staff name..."
-                    value={staffFilterInput}
-                    onChange={(e) => {
-                      setStaffFilterInput(e.target.value)
-                      setFilterSupport(e.target.value.trim())
-                    }}
-                    ml={2}
-                    width="120px"
-                  />
+                <Th whiteSpace="nowrap">
+                  Assigned To
+                  <Popover>
+                    <PopoverTrigger>
+                      <IconButton
+                        icon={<FiSearch />}
+                        aria-label="Filter staff"
+                        size="xs"
+                        ml={2}
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent>
+                      <PopoverArrow />
+                      <PopoverBody>
+                        <Input
+                          size="xs"
+                          placeholder="Type staff name..."
+                          value={staffFilterInput}
+                          onChange={(e) => {
+                            setStaffFilterInput(e.target.value)
+                            setFilterSupport(e.target.value.trim())
+                          }}
+                          width="120px"
+                        />
+                      </PopoverBody>
+                    </PopoverContent>
+                  </Popover>
                 </Th>
               )}
-              <Th>
-                Created
+              <Th whiteSpace="nowrap" display="inline-flex" alignItems="center">
+                <Box mr="1">Created</Box>
                 <FiChevronUp
                   cursor="pointer"
-                  ml={2}
+                  style={{ marginLeft: '6px', marginRight: '3px' }}
                   onClick={() => {
                     setSortField('created_at')
                     setSortOrder('asc')
@@ -581,14 +595,13 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                 />
                 <FiChevronDown
                   cursor="pointer"
-                  ml={1}
                   onClick={() => {
                     setSortField('created_at')
                     setSortOrder('desc')
                   }}
                 />
               </Th>
-              <Th>Actions</Th>
+              <Th whiteSpace="nowrap">Actions</Th>
             </Tr>
           </Thead>
           <Tbody>
