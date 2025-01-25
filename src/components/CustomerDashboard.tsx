@@ -17,7 +17,7 @@ import { Sidebar } from './Sidebar'
 import { FiHelpCircle, FiList, FiPlus } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
 import { CreateTicket } from './tickets/CreateTicket'
-import { useLocation, Navigate } from 'react-router-dom'
+import { useLocation, Navigate, Outlet } from 'react-router-dom'
 
 const sidebarItems = [
   { label: 'My Tickets', path: '/customer/tickets', icon: FiList },
@@ -50,9 +50,7 @@ export function CustomerDashboard() {
         </Box>
 
         <Box>
-          {isTicketsPath ? (
-            <TicketList userRole="customer" />
-          ) : isHelpPath ? (
+          {isHelpPath ? (
             <Box p={6}>
               <Heading size="md" mb={4}>Help & Support</Heading>
               <Text>
@@ -60,7 +58,7 @@ export function CustomerDashboard() {
               </Text>
             </Box>
           ) : (
-            <Navigate to="tickets" replace />
+            <Outlet />
           )}
         </Box>
       </Box>

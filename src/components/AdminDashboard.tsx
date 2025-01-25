@@ -3,13 +3,9 @@ import {
   Heading,
   Flex,
 } from '@chakra-ui/react'
-import { useLocation, Navigate } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiUsers, FiInbox, FiBarChart2, FiMessageSquare } from 'react-icons/fi'
-import { TicketList } from './tickets/TicketList'
-import { UserManagement } from './admin/UserManagement'
-import { PerformanceMetrics } from './admin/PerformanceMetrics'
-import { ResponseTemplates } from './admin/ResponseTemplates'
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
@@ -21,12 +17,7 @@ const sidebarItems = [
 ]
 
 export function AdminDashboard() {
-  const location = useLocation()
   const [userId, setUserId] = useState('')
-  const isTicketsPath = location.pathname.includes('/tickets')
-  const isUsersPath = location.pathname.includes('/users')
-  const isPerformancePath = location.pathname.includes('/performance')
-  const isTemplatesPath = location.pathname.includes('/templates')
 
   useEffect(() => {
     getCurrentUser()
@@ -51,19 +42,7 @@ export function AdminDashboard() {
           <Heading size="lg">Admin Dashboard</Heading>
         </Box>
 
-        <Box>
-          {isTicketsPath ? (
-            <TicketList userRole="admin" />
-          ) : isUsersPath ? (
-            <UserManagement />
-          ) : isPerformancePath ? (
-            <PerformanceMetrics userRole="admin" />
-          ) : isTemplatesPath ? (
-            <ResponseTemplates userRole="admin" userId={userId} />
-          ) : (
-            <Navigate to="users" replace />
-          )}
-        </Box>
+        <Outlet />
       </Box>
     </Flex>
   )

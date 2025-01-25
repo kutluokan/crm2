@@ -4,7 +4,7 @@ import {
   Flex,
 } from '@chakra-ui/react'
 import { supabase } from '../lib/supabase'
-import { useLocation, Navigate } from 'react-router-dom'
+import { useLocation, Navigate, Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiInbox, FiBarChart2, FiMessageSquare } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
@@ -49,14 +49,12 @@ export function SupportDashboard() {
         </Box>
 
         <Box>
-          {isTicketsPath ? (
-            <TicketList userRole="support" />
-          ) : isPerformancePath ? (
+          {isPerformancePath ? (
             <PerformanceMetrics userRole="support" userId={userId} />
           ) : isTemplatesPath ? (
             <ResponseTemplates userRole="support" userId={userId} />
           ) : (
-            <Navigate to="tickets" replace />
+            <Outlet />
           )}
         </Box>
       </Box>

@@ -19,6 +19,7 @@ import {
   IconButton,
 } from '@chakra-ui/react';
 import { FiChevronDown } from 'react-icons/fi';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 interface UserProfile {
@@ -47,7 +48,11 @@ interface Template {
   category: string;
 }
 
-export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
+export default function TicketChat(props: TicketChatProps) {
+  const { ticketId: paramTicketId } = useParams();
+  const ticketId = props.ticketId || paramTicketId;
+  const { currentUserId, isSupport } = props;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isInternal, setIsInternal] = useState(false);
@@ -79,6 +84,11 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         .select('*, profiles(full_name)')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
+
+      if (!ticketId) {
+        console.error('No ticket ID provided for TicketChat.');
+        return;
+      }
 
       // If not support/admin, filter out internal messages
       if (!isSupport) {
@@ -211,7 +221,18 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         </VStack>
       </Box>
 
-      <Box p={4} bg="white" borderTop="1px" borderColor="gray.200">
+      <Box
+        p={4}
+        bg="white"
+        borderTop="1px"
+        borderColor="gray.200"
+        position="fixed"
+        bottom="0"
+        left="240px"
+        right="0"
+        width="calc(100% - 240px)"
+        zIndex="10"
+      >
         <form onSubmit={sendMessage}>
           <VStack spacing={4}>
             {isSupport && (

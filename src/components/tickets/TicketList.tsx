@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { FiChevronUp, FiChevronDown } from 'react-icons/fi'
 import {
   Box,
@@ -102,10 +103,10 @@ interface RawTicket {
 }
 
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
+  const navigate = useNavigate()
   // Chakra hooks first
   const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclosure()
-  const { isOpen: isOpenDetails, onOpen: onOpenDetails, onClose: onCloseDetails } = useDisclosure()
   const textColor = useColorModeValue('gray.800', 'white')
   const theadBg = useColorModeValue('gray.50', 'gray.800')
   
@@ -463,10 +464,6 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }
 
-  function handleViewDetails(ticketId: string) {
-    setSelectedTicketId(ticketId)
-    onOpenDetails()
-  }
 
   // Add new functions for bulk operations
   const handleSelectAll = () => {
@@ -865,7 +862,15 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                   <Button
                     size="sm"
                     colorScheme="blue"
-                    onClick={() => handleViewDetails(ticket.id)}
+                    onClick={() => {
+                      if (userRole === 'admin') {
+                        navigate(`/admin/tickets/${ticket.id}`)
+                      } else if (userRole === 'support') {
+                        navigate(`/support/tickets/${ticket.id}`)
+                      } else {
+                        navigate(`/customer/tickets/${ticket.id}`)
+                      }
+                    }}
                   >
                     View Details
                   </Button>
@@ -876,20 +881,6 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         </Table>
       </Box>
 
-      <Modal isOpen={isOpenDetails} onClose={onCloseDetails} size="xl">
-        <ModalOverlay />
-        <ModalContent maxW="800px" h="90vh" my="5vh" overflow="hidden">
-          <ModalCloseButton zIndex="10" />
-          <ModalBody p={0} display="flex" flexDirection="column" overflow="hidden">
-            {selectedTicketId && (
-              <TicketDetails
-                ticketId={selectedTicketId}
-                userRole={userRole}
-              />
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
     </>
   )
 } 

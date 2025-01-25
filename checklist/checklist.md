@@ -65,3 +65,14 @@
 - [ ] Caching system
 - [x] Advanced search functionality
 - [ ] Multi-language support
+
+### AI Features (Week 2)
+- [ ] LLM-Generated Responses
+- [ ] Human-Assisted Suggestions
+- [ ] RAG-based Knowledge Management
+- [ ] Agentic Tool-Using AI
+- [ ] Refined Self-Service Support
+- [ ] Human-in-the-Loop Enhancements
+- [ ] Multi-Channel and Multi-Modality Support
+- [ ] AI-Summarized Ticket and System Status
+- [ ] Learning and Growth System

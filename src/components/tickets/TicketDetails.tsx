@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Box,
   VStack,
@@ -66,6 +67,9 @@ interface TicketDetailsProps {
 }
 
 export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
+  const { ticketId: paramTicketId } = useParams();
+  const effectiveTicketId = ticketId || paramTicketId;
+
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -114,7 +118,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
             )
           )
         `)
-        .eq('id', ticketId)
+        .eq('id', effectiveTicketId)
         .single();
 
       if (ticketError) throw ticketError;
@@ -309,7 +313,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       const { error } = await supabase
         .from('tickets')
         .update({ status: newStatus })
-        .eq('id', ticketId);
+        .eq('id', effectiveTicketId);
 
       if (error) throw error;
 
@@ -335,7 +339,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       const { error } = await supabase
         .from('tickets')
         .update({ status: 'closed' })
-        .eq('id', ticketId);
+        .eq('id', effectiveTicketId);
 
       if (error) throw error;
 
@@ -361,7 +365,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       const { error } = await supabase
         .from('tickets')
         .update({ priority: newPriority })
-        .eq('id', ticketId);
+        .eq('id', effectiveTicketId);
 
       if (error) throw error;
 
@@ -400,9 +404,22 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const canManageTags = userRole === 'admin' || userRole === 'support';
 
   return (
-    <Box height="100%" display="flex" flexDirection="column" overflow="hidden">
+    <Box height="100vh" display="flex" flexDirection="column">
       {/* Fixed Header */}
-      <Box p={6} bg="white" borderBottom="1px" borderColor="gray.200">
+      <Box
+        p={6}
+        bg="white"
+        borderBottom="1px"
+        borderColor="gray.200"
+        position="fixed"
+        top="0"
+        left="240px"
+        right="0"
+        width="calc(100% - 240px)"
+        zIndex="10"
+        display="flex"
+        flexDirection="column"
+      >
         <HStack justify="space-between" align="flex-start" mb={2}>
           <Box flex="1">
             <HStack>
@@ -418,8 +435,11 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
                 />
               )}
             </HStack>
-            <Text color="gray.600" mt={2}>{ticket.description}</Text>
-            
+
+            <Box mt={4}>
+              <Heading size="md">Conversation</Heading>
+            </Box>
+
             {/* Tags Section */}
             <Wrap mt={2} spacing={2}>
               {ticket.tags?.map((tag) => (
@@ -591,12 +611,16 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       </Box>
 
       {/* Chat Section */}
-      <Box flex="1" minH="0" display="flex" flexDirection="column" overflow="hidden">
-        <Box p={6} bg="white" borderBottom="1px" borderColor="gray.200">
-          <Heading size="md">Conversation</Heading>
-        </Box>
+      <Box
+        flex="1"
+        display="flex"
+        flexDirection="column"
+        position="relative"
+        mt="24"
+        overflow="hidden"
+      >
         
-        <Box flex="1" minH="0">
+        <Box flex="1" overflow="auto">
           <TicketChat
             ticketId={ticketId}
             currentUserId={currentUserId}

@@ -7,6 +7,7 @@ import { CustomerDashboard } from './components/CustomerDashboard'
 import { SupportDashboard } from './components/SupportDashboard'
 import { UserManagement } from './components/admin/UserManagement'
 import { TicketList } from './components/tickets/TicketList'
+import { TicketDetails } from './components/tickets/TicketDetails'
 import { PerformanceMetrics } from './components/admin/PerformanceMetrics'
 import { supabase } from './lib/supabase'
 import { Session } from '@supabase/supabase-js'
@@ -197,6 +198,7 @@ function AppContent() {
             <Route path="/admin/*" element={<AdminDashboard />}>
               <Route path="users" element={<UserManagement />} />
               <Route path="tickets" element={<TicketList userRole="admin" />} />
+              <Route path="tickets/:ticketId" element={<TicketDetails userRole="admin" />} />
               <Route path="performance" element={<PerformanceMetrics userRole="admin" />} />
               <Route path="" element={<Navigate to="users" replace />} />
             </Route>
@@ -204,6 +206,7 @@ function AppContent() {
           {profile?.role === 'support' && (
             <Route path="/support/*" element={<SupportDashboard />}>
               <Route path="tickets" element={<TicketList userRole="support" />} />
+              <Route path="tickets/:ticketId" element={<TicketDetails userRole="support" />} />
               <Route path="performance" element={<PerformanceMetrics userRole="support" userId={profile.id} />} />
               <Route path="" element={<Navigate to="tickets" replace />} />
             </Route>
@@ -211,6 +214,7 @@ function AppContent() {
           {profile?.role === 'customer' && (
             <Route path="/customer/*" element={<CustomerDashboard />}>
               <Route path="tickets" element={<TicketList userRole="customer" />} />
+              <Route path="tickets/:ticketId" element={<TicketDetails userRole="customer" />} />
               <Route path="help" element={<Box p={6}>Help & Support content here</Box>} />
               <Route path="" element={<Navigate to="tickets" replace />} />
             </Route>
