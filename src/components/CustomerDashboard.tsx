@@ -31,28 +31,11 @@ export function CustomerDashboard() {
   const isHelpPath = location.pathname.includes('/help')
 
   return (
-    <Flex h="100vh" overflow="hidden">
+    <Flex h="100vh" w="100vw" overflowY="auto" overflowX="hidden">
       <Sidebar items={sidebarItems} />
-      <Box 
-        ml="240px" 
-        flex="1"
-        overflowY="auto"
-        bg="gray.50"
-        css={{
-          '&::-webkit-scrollbar': {
-            width: '4px',
-          },
-          '&::-webkit-scrollbar-track': {
-            width: '6px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: '#CBD5E0',
-            borderRadius: '24px',
-          },
-        }}
-      >
-        <Box p={8} maxW="100%" mx="auto">
-          <HStack justify="space-between" mb={8}>
+      <Box ml="240px" w="full">
+        <Box bg="gray.50" px={8} py={4}>
+          <HStack justify="space-between">
             <Heading size="lg">Customer Dashboard</Heading>
             {isTicketsPath && (
               <Button
@@ -64,21 +47,21 @@ export function CustomerDashboard() {
               </Button>
             )}
           </HStack>
+        </Box>
 
-          <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
-            {isTicketsPath ? (
-              <TicketList userRole="customer" />
-            ) : isHelpPath ? (
-              <Box p={6}>
-                <Heading size="md" mb={4}>Help & Support</Heading>
-                <Text>
-                  Need help? Here you can find guides and FAQs to help you use our support system effectively.
-                </Text>
-              </Box>
-            ) : (
-              <Navigate to="tickets" replace />
-            )}
-          </Box>
+        <Box>
+          {isTicketsPath ? (
+            <TicketList userRole="customer" />
+          ) : isHelpPath ? (
+            <Box p={6}>
+              <Heading size="md" mb={4}>Help & Support</Heading>
+              <Text>
+                Need help? Here you can find guides and FAQs to help you use our support system effectively.
+              </Text>
+            </Box>
+          ) : (
+            <Navigate to="tickets" replace />
+          )}
         </Box>
       </Box>
 

@@ -38,6 +38,8 @@ export function PerformanceMetrics({ userRole, userId }: PerformanceMetricsProps
   })
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('week')
   const [loading, setLoading] = useState(true)
+  const bgColor = useColorModeValue('white', 'gray.800')
+  const borderColor = useColorModeValue('gray.200', 'gray.700')
 
   useEffect(() => {
     fetchMetrics()
@@ -114,12 +116,9 @@ export function PerformanceMetrics({ userRole, userId }: PerformanceMetricsProps
     return <Progress size="xs" isIndeterminate />
   }
 
-  const bgColor = useColorModeValue('white', 'gray.800')
-  const borderColor = useColorModeValue('gray.200', 'gray.700')
-
   return (
-    <Box p={6}>
-      <VStack spacing={6} align="stretch">
+    <Box w="100%">
+      <Box borderBottom="1px" borderColor="gray.200" px={4} py={2}>
         <HStack justify="space-between">
           <Heading size="lg">Performance Metrics</Heading>
           <Select
@@ -132,55 +131,59 @@ export function PerformanceMetrics({ userRole, userId }: PerformanceMetricsProps
             <option value="month">Last 30 Days</option>
           </Select>
         </HStack>
+      </Box>
 
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-          <Box p={6} bg={bgColor} borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
-            <Stat>
-              <StatLabel>Total Tickets</StatLabel>
-              <StatNumber>{metrics.totalTickets}</StatNumber>
-              <StatHelpText>In selected period</StatHelpText>
-            </Stat>
-          </Box>
+      <SimpleGrid 
+        columns={{ base: 1, md: 2, lg: 3 }} 
+        spacing={0}
+        w="100%"
+      >
+        <Box p={4} bg={bgColor} borderRight="1px" borderBottom="1px" borderColor={borderColor}>
+          <Stat>
+            <StatLabel>Total Tickets</StatLabel>
+            <StatNumber>{metrics.totalTickets}</StatNumber>
+            <StatHelpText>In selected period</StatHelpText>
+          </Stat>
+        </Box>
 
-          <Box p={6} bg={bgColor} borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
-            <Stat>
-              <StatLabel>Open Tickets</StatLabel>
-              <StatNumber>{metrics.openTickets}</StatNumber>
-              <StatHelpText>Requiring attention</StatHelpText>
-            </Stat>
-          </Box>
+        <Box p={4} bg={bgColor} borderRight="1px" borderBottom="1px" borderColor={borderColor}>
+          <Stat>
+            <StatLabel>Open Tickets</StatLabel>
+            <StatNumber>{metrics.openTickets}</StatNumber>
+            <StatHelpText>Requiring attention</StatHelpText>
+          </Stat>
+        </Box>
 
-          <Box p={6} bg={bgColor} borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
-            <Stat>
-              <StatLabel>Resolved Tickets</StatLabel>
-              <StatNumber>{metrics.resolvedTickets}</StatNumber>
-              <StatHelpText>Successfully completed</StatHelpText>
-            </Stat>
-          </Box>
+        <Box p={4} bg={bgColor} borderBottom="1px" borderColor={borderColor}>
+          <Stat>
+            <StatLabel>Resolved Tickets</StatLabel>
+            <StatNumber>{metrics.resolvedTickets}</StatNumber>
+            <StatHelpText>Successfully completed</StatHelpText>
+          </Stat>
+        </Box>
 
-          <Box p={6} bg={bgColor} borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
-            <Stat>
-              <StatLabel>Avg. Resolution Time</StatLabel>
-              <StatNumber>{metrics.avgResolutionTime.toFixed(1)}h</StatNumber>
-              <StatHelpText>Time to resolve tickets</StatHelpText>
-            </Stat>
-          </Box>
+        <Box p={4} bg={bgColor} borderRight="1px" borderBottom="1px" borderColor={borderColor}>
+          <Stat>
+            <StatLabel>Avg. Resolution Time</StatLabel>
+            <StatNumber>{metrics.avgResolutionTime.toFixed(1)}h</StatNumber>
+            <StatHelpText>Time to resolve tickets</StatHelpText>
+          </Stat>
+        </Box>
 
-          <Box p={6} bg={bgColor} borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
-            <Stat>
-              <StatLabel>Response Rate</StatLabel>
-              <StatNumber>{metrics.responseRate.toFixed(1)}%</StatNumber>
-              <Progress
-                value={metrics.responseRate}
-                size="sm"
-                colorScheme={metrics.responseRate > 75 ? 'green' : metrics.responseRate > 50 ? 'yellow' : 'red'}
-                mt={2}
-              />
-              <StatHelpText>Resolved vs Total</StatHelpText>
-            </Stat>
-          </Box>
-        </SimpleGrid>
-      </VStack>
+        <Box p={4} bg={bgColor} borderRight="1px" borderBottom="1px" borderColor={borderColor}>
+          <Stat>
+            <StatLabel>Response Rate</StatLabel>
+            <StatNumber>{metrics.responseRate.toFixed(1)}%</StatNumber>
+            <Progress
+              value={metrics.responseRate}
+              size="sm"
+              colorScheme={metrics.responseRate > 75 ? 'green' : metrics.responseRate > 50 ? 'yellow' : 'red'}
+              mt={2}
+            />
+            <StatHelpText>Resolved vs Total</StatHelpText>
+          </Stat>
+        </Box>
+      </SimpleGrid>
     </Box>
   )
 } 

@@ -44,42 +44,25 @@ export function AdminDashboard() {
   }
 
   return (
-    <Flex h="100vh" overflow="hidden">
+    <Flex h="100vh" w="100vw" overflowY="auto" overflowX="hidden">
       <Sidebar items={sidebarItems} />
-      <Box 
-        ml="240px" 
-        flex="1"
-        overflowY="auto"
-        bg="gray.50"
-        css={{
-          '&::-webkit-scrollbar': {
-            width: '4px',
-          },
-          '&::-webkit-scrollbar-track': {
-            width: '6px',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: '#CBD5E0',
-            borderRadius: '24px',
-          },
-        }}
-      >
-        <Box p={8} maxW="100%" mx="auto">
-          <Heading size="lg" mb={8}>Admin Dashboard</Heading>
+      <Box ml="240px" w="full">
+        <Box bg="gray.50" px={8} py={4}>
+          <Heading size="lg">Admin Dashboard</Heading>
+        </Box>
 
-          <Box bg="white" rounded="lg" shadow="base" overflow="hidden">
-            {isTicketsPath ? (
-              <TicketList userRole="admin" />
-            ) : isUsersPath ? (
-              <UserManagement />
-            ) : isPerformancePath ? (
-              <PerformanceMetrics userRole="admin" />
-            ) : isTemplatesPath ? (
-              <ResponseTemplates userRole="admin" userId={userId} />
-            ) : (
-              <Navigate to="users" replace />
-            )}
-          </Box>
+        <Box>
+          {isTicketsPath ? (
+            <TicketList userRole="admin" />
+          ) : isUsersPath ? (
+            <UserManagement />
+          ) : isPerformancePath ? (
+            <PerformanceMetrics userRole="admin" />
+          ) : isTemplatesPath ? (
+            <ResponseTemplates userRole="admin" userId={userId} />
+          ) : (
+            <Navigate to="users" replace />
+          )}
         </Box>
       </Box>
     </Flex>
