@@ -229,8 +229,8 @@ export default function TicketChat(props: TicketChatProps) {
         position="fixed"
         bottom="0"
         left="240px"
-        right="0"
-        width="calc(100% - 240px)"
+        right="300px"
+        width="calc(100% - 540px)"
         zIndex="10"
       >
         <form onSubmit={sendMessage}>

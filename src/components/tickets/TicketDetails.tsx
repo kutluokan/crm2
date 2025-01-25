@@ -34,6 +34,7 @@ import { supabase } from '../../lib/supabase';
 import TicketChat from '../TicketChat';
 import { EditTicket } from './EditTicket';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { TicketInfo } from './TicketInfo';
 
 interface Tag {
   id: string;
@@ -414,8 +415,8 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         position="fixed"
         top="0"
         left="240px"
-        right="0"
-        width="calc(100% - 240px)"
+        right="300px"
+        width="calc(100% - 540px)"
         zIndex="10"
         display="flex"
         flexDirection="column"
@@ -618,6 +619,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         position="relative"
         mt="24"
         overflow="hidden"
+        mr="300px"
       >
         <Box flex="1" overflow="auto">
           <TicketChat
@@ -627,6 +629,9 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           />
         </Box>
       </Box>
+
+      {/* Right Sidebar */}
+      <TicketInfo ticket={ticket} customerEmail={customerEmail} />
 
       {/* Edit Ticket Modal */}
       <Modal 
