@@ -18,6 +18,7 @@ import { FiHelpCircle, FiList, FiPlus } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
 import { CreateTicket } from './tickets/CreateTicket'
 import { useLocation, Navigate, Outlet } from 'react-router-dom'
+import { CustomerHelpAI } from './CustomerHelpAI'
 
 const sidebarItems = [
   { label: 'My Tickets', path: '/customer/tickets', icon: FiList },
@@ -51,12 +52,7 @@ export function CustomerDashboard() {
 
         <Box>
           {isHelpPath ? (
-            <Box p={6}>
-              <Heading size="md" mb={4}>Help & Support</Heading>
-              <Text>
-                Need help? Here you can find guides and FAQs to help you use our support system effectively.
-              </Text>
-            </Box>
+            <CustomerHelpAI />
           ) : (
             <Outlet />
           )}
