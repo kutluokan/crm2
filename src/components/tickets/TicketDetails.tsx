@@ -96,9 +96,6 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const editDisclosure = useDisclosure();
   const tagDisclosure = useDisclosure();
   const colorModeValue = useColorModeValue('gray.800', 'white');
-  const [newMessage, setNewMessage] = useState('');
-  const [isInternal, setIsInternal] = useState(false);
-  const [templates, setTemplates] = useState<Template[]>([]);
 
   useEffect(() => {
     if (!effectiveTicketId) {
@@ -110,16 +107,13 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     fetchTicketDetails();
     getCurrentUser();
     fetchAvailableTags();
-    if (currentUserId) {
-      fetchTemplates();
-    }
 
     const channel = setupTicketSubscription();
     
     return () => {
       channel.unsubscribe();
     }
-  }, [effectiveTicketId, currentUserId]);
+  }, [effectiveTicketId]);
 
   async function getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -424,59 +418,6 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     }
   }
 
-  async function fetchTemplates() {
-    if (userRole === 'customer' || !currentUserId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('response_templates')
-        .select('*')
-        .or(`created_by.eq.${currentUserId},is_global.eq.true`)
-        .order('category')
-        .order('title');
-
-      if (error) throw error;
-      setTemplates(data || []);
-    } catch (error) {
-      console.error('Error fetching templates:', error);
-    }
-  }
-
-  function insertTemplate(content: string) {
-    setNewMessage(prev => {
-      const hasText = prev.trim().length > 0;
-      return hasText ? `${prev}\n\n${content}` : content;
-    });
-  }
-
-  async function sendMessage(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-
-    try {
-      const { error } = await supabase
-        .from('ticket_messages')
-        .insert([
-          {
-            ticket_id: effectiveTicketId,
-            user_id: currentUserId,
-            message: newMessage.trim(),
-            is_internal: isInternal,
-          },
-        ]);
-
-      if (error) throw error;
-      setNewMessage('');
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: 'Error sending message',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
   if (!ticket) {
     return <Box p={6}>Loading ticket details...</Box>;
   }
@@ -535,71 +476,6 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
               isSupport={userRole !== 'customer'}
             />
           </Box>
-          {/* Footer for Message Input */}
-          <Box
-            p={4}
-            bg="white"
-            borderTop="1px"
-            borderColor="gray.200"
-            position="sticky"
-            bottom="0"
-            zIndex="999"
-            width="100%"
-          >
-            <form onSubmit={sendMessage}>
-              <VStack spacing={4}>
-                {userRole !== 'customer' && (
-                  <FormControl display="flex" alignItems="center">
-                    <FormLabel htmlFor="internal-note" mb="0">
-                      Internal Note
-                    </FormLabel>
-                    <Switch
-                      id="internal-note"
-                      isChecked={isInternal}
-                      onChange={(e) => setIsInternal(e.target.checked)}
-                    />
-                  </FormControl>
-                )}
-                <HStack w="100%">
-                  <Input
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder={isInternal ? "Add an internal note..." : "Type a message..."}
-                    bg="white"
-                  />
-                  {userRole !== 'customer' && templates.length > 0 && (
-                    <Menu>
-                      <MenuButton
-                        as={IconButton}
-                        icon={<FiChevronDown />}
-                        variant="outline"
-                        aria-label="Templates"
-                      />
-                      <MenuList>
-                        {Array.from(new Set(templates.map(t => t.category))).map(category => (
-                          <MenuGroup key={category} title={category.charAt(0).toUpperCase() + category.slice(1)}>
-                            {templates
-                              .filter(t => t.category === category)
-                              .map(template => (
-                                <MenuItem
-                                  key={template.id}
-                                  onClick={() => insertTemplate(template.content)}
-                                >
-                                  {template.title}
-                                </MenuItem>
-                              ))}
-                          </MenuGroup>
-                        ))}
-                      </MenuList>
-                    </Menu>
-                  )}
-                  <Button type="submit" colorScheme="blue">
-                    Send
-                  </Button>
-                </HStack>
-              </VStack>
-            </form>
-          </Box>
         </Box>
         <TicketInfo
           ticket={ticket}
@@ -609,8 +485,6 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           onUpdate={fetchTicketDetails}
         />
       </Box>
-
-
 
       {/* Edit Ticket Modal */}
       <Modal 
