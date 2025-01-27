@@ -251,23 +251,7 @@ Remember:
           throw aiMessageError;
         }
 
-        // Add the summary as an internal note
-        if (summary) {
-          const { error: summaryError } = await supabaseClient
-            .from('ticket_messages')
-            .insert({
-              ticket_id: ticket.id,
-              user_id: user.id,
-              message: summary,
-              is_system: true,
-              is_internal: true
-            });
-
-          if (summaryError) {
-            throw summaryError;
-          }
-        }
-
+        // Remove the internal summary section
         ticketSummary = {
           title: parsedTicket.title,
           description: parsedTicket.description,
@@ -289,7 +273,7 @@ Remember:
         content: responseContent,
         createTicket: needsTicket,
         ticketSummary,
-        internalSummary: summary
+        internalSummary: null
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

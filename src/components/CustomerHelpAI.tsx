@@ -110,23 +110,15 @@ export function CustomerHelpAI() {
         throw new Error('No ticket returned after creation');
       }
 
-      // Add the summary as the first message
+      // Add only the regular summary message
       const { error: messageError } = await supabase
         .from('ticket_messages')
-        .insert([
-          {
-            ticket_id: ticket.id,
-            user_id: user.id,
-            message: summary.description,
-            is_internal: false
-          },
-          {
-            ticket_id: ticket.id,
-            user_id: user.id,
-            message: internalSummary,
-            is_internal: true
-          }
-        ]);
+        .insert([{
+          ticket_id: ticket.id,
+          user_id: user.id,
+          message: summary.description,
+          is_internal: false
+        }]);
 
       if (messageError) {
         console.error('Error adding messages:', messageError);
