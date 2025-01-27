@@ -558,12 +558,98 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
     }
   }
 
+  async function bulkDeleteTickets() {
+    if (selectedTickets.size === 0) return
+
+    try {
+      // First delete all associated documents
+      const { error: docsError } = await supabase
+        .from('documents')
+        .delete()
+        .in('ticket_id', Array.from(selectedTickets))
+
+      if (docsError) {
+        console.error('Error deleting documents:', docsError)
+        throw docsError
+      }
+
+      // Then delete the tickets
+      const { error } = await supabase
+        .from('tickets')
+        .delete()
+        .in('id', Array.from(selectedTickets))
+
+      if (error) throw error
+
+      // Remove deleted tickets from local state
+      setTickets(tickets.filter(ticket => !selectedTickets.has(ticket.id)))
+
+      toast({
+        title: `Deleted ${selectedTickets.size} tickets`,
+        status: 'success',
+        duration: 2000,
+      })
+
+      setSelectedTickets(new Set())
+      setSelectAll(false)
+    } catch (error) {
+      console.error('Error deleting tickets:', error)
+      toast({
+        title: 'Error deleting tickets',
+        status: 'error',
+        duration: 3000,
+      })
+    }
+  }
+
   if (loading) {
     return <Text p={6}>Loading tickets...</Text>
   }
 
   return (
     <>
+      {(userRole === 'admin' || userRole === 'support') && selectedTickets.size > 0 && (
+        <Box mb={4} p={4} bg="white" shadow="sm" borderRadius="md">
+          <HStack spacing={4}>
+            <Text>Selected: {selectedTickets.size} tickets</Text>
+            <ButtonGroup size="sm">
+              <Button
+                colorScheme="red"
+                onClick={bulkDeleteTickets}
+              >
+                Delete Selected
+              </Button>
+              <Button
+                colorScheme="blue"
+                onClick={() => bulkUpdateStatus('closed')}
+              >
+                Close Selected
+              </Button>
+              <Button
+                colorScheme="green"
+                onClick={() => bulkUpdateStatus('resolved')}
+              >
+                Mark Resolved
+              </Button>
+              {userRole === 'admin' && (
+                <Select
+                  size="sm"
+                  placeholder="Assign to..."
+                  onChange={(e) => bulkUpdateAssignment(e.target.value)}
+                  width="200px"
+                >
+                  <option value="">Unassign</option>
+                  {supportStaff.map(staff => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.full_name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </ButtonGroup>
+          </HStack>
+        </Box>
+      )}
       <Box overflowX="auto" overflowY="auto" maxH="calc(100vh - 200px)">
         <Table variant="simple" style={{ tableLayout: 'auto', width: '100%' }} className="ticket-table">
           <Thead position="sticky" top="0" zIndex="1" bg={theadBg}>
