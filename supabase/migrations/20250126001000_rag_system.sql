@@ -71,6 +71,27 @@ create policy "Users can view their documents"
         auth.role() = 'authenticated'
     );
 
+-- Add delete policies for documents
+create policy "Support and admin can delete any document"
+    on documents for delete
+    using (
+        exists (
+            select 1 from profiles
+            where id = auth.uid()
+            and (role = 'support' or role = 'admin')
+        )
+    );
+
+create policy "Customers can delete their own ticket documents"
+    on documents for delete
+    using (
+        exists (
+            select 1 from tickets
+            where id = documents.ticket_id
+            and customer_id = auth.uid()
+        )
+    );
+
 -- Create a function to match documents based on embedding similarity
 create or replace function match_documents(
   query_embedding vector(1536),
@@ -95,4 +116,21 @@ begin
   order by documents.embedding <=> query_embedding
   limit match_count;
 end;
-$$; 
+$$;
+
+-- Add delete policies for ticket messages
+create policy "Support and admin can delete any message"
+    on ticket_messages for delete
+    using (
+        exists (
+            select 1 from profiles
+            where id = auth.uid()
+            and (role = 'support' or role = 'admin')
+        )
+    );
+
+create policy "Customers can delete their own messages"
+    on ticket_messages for delete
+    using (
+        user_id = auth.uid()
+    ); 

@@ -15,13 +15,27 @@ import {
   useToast,
   InputGroup,
   InputRightElement,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Flex,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
+  Tooltip,
 } from '@chakra-ui/react';
-import { FiPaperclip, FiSearch } from 'react-icons/fi';
+import { FiPaperclip, FiSearch, FiMoreVertical, FiTrash2, FiFile } from 'react-icons/fi';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 interface UserProfile {
   full_name: string;
+  role: string;
 }
 
 interface Message {
@@ -45,8 +59,16 @@ interface Document {
   similarity: number;
 }
 
+interface File {
+  id: string;
+  filename: string;
+  ticket_id: string;
+  created_at: string;
+}
+
 export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [isInternal, setIsInternal] = useState(false);
@@ -54,6 +76,9 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const [userRole, setUserRole] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
     let isMounted = true;
@@ -61,6 +86,8 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
     const loadMessagesIfMounted = async () => {
       if (isMounted) {
         await loadMessages();
+        await fetchFiles();
+        await getCurrentUser();
       }
     };
 
@@ -92,8 +119,18 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
           table: 'ticket_messages',
           filter: `ticket_id=eq.${ticketId}`,
         },
-        () => {
-          loadMessages();
+        (payload) => {
+          // Handle different types of changes
+          switch (payload.eventType) {
+            case 'DELETE':
+              setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+              break;
+            case 'INSERT':
+            case 'UPDATE':
+            default:
+              loadMessages();
+              break;
+          }
         }
       )
       .subscribe();
@@ -109,7 +146,17 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       // Create a new query each time
       const query = supabase
         .from('ticket_messages')
-        .select('*, profiles(full_name)')
+        .select(`
+          id,
+          message,
+          created_at,
+          user_id,
+          is_internal,
+          profiles (
+            full_name,
+            role
+          )
+        `)
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
 
@@ -133,22 +180,54 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         user_id: msg.user_id,
         is_internal: msg.is_internal,
         user: {
-          full_name: msg.profiles?.full_name || 'Unknown User'
+          full_name: msg.profiles?.full_name || 'Unknown User',
+          role: msg.profiles?.role || 'Unknown Role'
         }
       }));
 
       setMessages(transformedMessages);
     } catch (error) {
       console.error('Error loading messages:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      }
+      toast({
+        title: 'Error',
+        description: 'Failed to load messages',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     }
   }
+
+  const fetchFiles = async () => {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('id, filename, ticket_id, created_at')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching files:', error);
+      return;
+    }
+
+    setFiles(data || []);
+  };
+
+  const getCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserId(user.id);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile) {
+        setUserRole(profile.role);
+      }
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -273,6 +352,134 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
     }
   };
 
+  const handleDeleteMessage = async (messageId: string, messageUserId: string) => {
+    // Check permissions
+    if (userRole !== 'admin' && userRole !== 'support' && userId !== messageUserId) {
+      toast({
+        title: 'Permission Denied',
+        description: 'You can only delete your own messages',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      // Delete from database with proper constraints
+      const { error } = await supabase
+        .from('ticket_messages')
+        .delete()
+        .match({ 
+          id: messageId, 
+          ticket_id: ticketId 
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      // Optimistically update UI
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      
+      toast({
+        title: 'Success',
+        description: 'Message deleted',
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete message',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      // Refresh messages if delete failed
+      await loadMessages();
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    // Check permissions
+    if (userRole !== 'admin' && userRole !== 'support') {
+      const { data: ticket } = await supabase
+        .from('tickets')
+        .select('customer_id')
+        .eq('id', ticketId)
+        .single();
+
+      if (!ticket || ticket.customer_id !== userId) {
+        toast({
+          title: 'Permission Denied',
+          description: 'You can only delete your own files',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+        return;
+      }
+    }
+
+    try {
+      // Get file info first
+      const fileToDelete = files.find(f => f.id === fileId);
+      if (!fileToDelete) throw new Error('File not found');
+
+      // Delete from storage first
+      const { error: storageError } = await supabase.storage
+        .from('documents')
+        .remove([fileToDelete.filename]);
+
+      if (storageError) {
+        throw storageError;
+      }
+
+      // Delete from database with proper constraints
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .match({ 
+          id: fileId, 
+          ticket_id: ticketId 
+        });
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      // Refresh files from server to ensure sync
+      await fetchFiles();
+      
+      // Close modal if no files left
+      if (files.length <= 1) {
+        onClose();
+      }
+
+      toast({
+        title: 'Success',
+        description: 'File deleted',
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete file',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      // Refresh files to ensure UI is in sync
+      await fetchFiles();
+    }
+  };
+
   return (
     <Box height="100%" display="flex" flexDirection="column">
       <Box flex="1" overflowY="auto" p={4} bg="gray.50">
@@ -297,27 +504,35 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
               boxShadow="sm"
               borderLeft={message.is_internal ? '4px solid orange' : undefined}
             >
-              <HStack 
-                spacing={2} 
-                mb={2}
-                justify="flex-start"
-                flexWrap="wrap"
-              >
-                {message.user_id !== currentUserId && (
-                  <Avatar size="sm" name={message.user?.full_name} />
-                )}
-                <VStack spacing={0} align="flex-start">
-                  <Text fontSize="sm" fontWeight="bold" noOfLines={1}>
-                    {message.user?.full_name}
-                  </Text>
-                  <Text fontSize="xs" color="gray.500">
-                    {new Date(message.created_at).toLocaleString()}
-                  </Text>
-                </VStack>
-                {message.user_id === currentUserId && (
-                  <Avatar size="sm" name={message.user?.full_name} />
-                )}
-              </HStack>
+              <Flex justify="space-between" align="center" mb={2}>
+                <Flex align="center" gap={2}>
+                  <Text fontWeight="bold">{message.user.full_name}</Text>
+                  <Badge colorScheme={message.is_internal ? 'purple' : 'blue'}>
+                    {message.is_internal ? 'Internal' : message.user.role}
+                  </Badge>
+                </Flex>
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    icon={<FiMoreVertical />}
+                    variant="ghost"
+                    size="sm"
+                  />
+                  <MenuList>
+                    <MenuItem
+                      icon={<FiTrash2 />}
+                      onClick={() => handleDeleteMessage(message.id, message.user_id)}
+                      isDisabled={
+                        userRole !== 'admin' &&
+                        userRole !== 'support' &&
+                        userId !== message.user_id
+                      }
+                    >
+                      Delete Message
+                    </MenuItem>
+                  </MenuList>
+                </Menu>
+              </Flex>
               <Box>
                 <Text 
                   whiteSpace="pre-wrap" 
@@ -330,6 +545,9 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
               {message.is_internal && (
                 <Badge colorScheme="orange" mt={2}>Internal Note</Badge>
               )}
+              <Text fontSize="sm" color="gray.500" mt={2}>
+                {new Date(message.created_at).toLocaleString()}
+              </Text>
             </Box>
           ))}
           <div ref={messagesEndRef} />
@@ -337,29 +555,43 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       </Box>
       <Box p={4} bg="white" borderTop="1px" borderColor="gray.200">
         <VStack spacing={2}>
-          <HStack width="100%" spacing={2}>
-            {isSupport && (
+          <HStack width="100%" spacing={2} justify="space-between">
+            <HStack spacing={2}>
+              {isSupport && (
+                <FormControl display="flex" alignItems="center" width="auto">
+                  <FormLabel htmlFor="internal-note" mb="0" fontSize="sm">
+                    Internal Note
+                  </FormLabel>
+                  <Switch
+                    id="internal-note"
+                    isChecked={isInternal}
+                    onChange={(e) => setIsInternal(e.target.checked)}
+                  />
+                </FormControl>
+              )}
               <FormControl display="flex" alignItems="center" width="auto">
-                <FormLabel htmlFor="internal-note" mb="0" fontSize="sm">
-                  Internal Note
+                <FormLabel htmlFor="rag-query" mb="0" fontSize="sm">
+                  Search Documents
                 </FormLabel>
                 <Switch
-                  id="internal-note"
-                  isChecked={isInternal}
-                  onChange={(e) => setIsInternal(e.target.checked)}
+                  id="rag-query"
+                  isChecked={isRagQuery}
+                  onChange={(e) => setIsRagQuery(e.target.checked)}
                 />
               </FormControl>
+            </HStack>
+            {files.length > 0 && (
+              <Tooltip label="View attached files">
+                <Button
+                  leftIcon={<FiFile />}
+                  variant="ghost"
+                  size="sm"
+                  onClick={onOpen}
+                >
+                  {files.length} {files.length === 1 ? 'file' : 'files'}
+                </Button>
+              </Tooltip>
             )}
-            <FormControl display="flex" alignItems="center" width="auto">
-              <FormLabel htmlFor="rag-query" mb="0" fontSize="sm">
-                Search Documents
-              </FormLabel>
-              <Switch
-                id="rag-query"
-                isChecked={isRagQuery}
-                onChange={(e) => setIsRagQuery(e.target.checked)}
-              />
-            </FormControl>
           </HStack>
           <HStack width="100%" spacing={2}>
             <InputGroup>
@@ -397,6 +629,58 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
           onChange={handleFileUpload}
         />
       </Box>
+
+      {/* Files Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Attached Files</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack align="stretch" spacing={2}>
+              {files.map((file) => (
+                <Flex
+                  key={file.id}
+                  p={3}
+                  bg="gray.50"
+                  borderRadius="md"
+                  justify="space-between"
+                  align="center"
+                >
+                  <HStack spacing={3}>
+                    <FiFile />
+                    <Text>{file.filename.split('/').pop()}</Text>
+                  </HStack>
+                  <Menu>
+                    <MenuButton
+                      as={IconButton}
+                      icon={<FiMoreVertical />}
+                      variant="ghost"
+                      size="sm"
+                    />
+                    <MenuList>
+                      <MenuItem
+                        icon={<FiTrash2 />}
+                        onClick={() => {
+                          handleDeleteFile(file.id);
+                          if (files.length <= 1) onClose();
+                        }}
+                        isDisabled={
+                          userRole !== 'admin' &&
+                          userRole !== 'support' &&
+                          userId !== file.user_id
+                        }
+                      >
+                        Delete File
+                      </MenuItem>
+                    </MenuList>
+                  </Menu>
+                </Flex>
+              ))}
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 } 
