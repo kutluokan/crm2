@@ -6,7 +6,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useLocation, Navigate, Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
-import { FiInbox, FiBarChart2, FiMessageSquare } from 'react-icons/fi'
+import { FiInbox, FiBarChart2, FiMessageSquare, FiCpu } from 'react-icons/fi'
 import { TicketList } from './tickets/TicketList'
 import { PerformanceMetrics } from './admin/PerformanceMetrics'
 import { ResponseTemplates } from './admin/ResponseTemplates'
@@ -16,6 +16,7 @@ const sidebarItems = [
   { label: 'My Tickets', path: '/support/tickets', icon: FiInbox },
   { label: 'Performance', path: '/support/performance', icon: FiBarChart2 },
   { label: 'Templates', path: '/support/templates', icon: FiMessageSquare },
+  { label: 'AI Assistant', path: '/support/ai-assistant', icon: FiCpu },
 ]
 
 export function SupportDashboard() {

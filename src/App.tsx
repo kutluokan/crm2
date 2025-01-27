@@ -9,6 +9,8 @@ import { UserManagement } from './components/admin/UserManagement'
 import { TicketList } from './components/tickets/TicketList'
 import { TicketDetails } from './components/tickets/TicketDetails'
 import { PerformanceMetrics } from './components/admin/PerformanceMetrics'
+import { ResponseTemplates } from './components/admin/ResponseTemplates'
+import { TicketAIAssistant } from './components/admin/TicketAIAssistant'
 import { supabase } from './lib/supabase'
 import { Session } from '@supabase/supabase-js'
 
@@ -214,8 +216,10 @@ function AppContent() {
               <Route path="users" element={<UserManagement />} />
               <Route path="tickets" element={<TicketList userRole="admin" />} />
               <Route path="tickets/:ticketId" element={<TicketDetails userRole="admin" />} />
-              <Route path="performance" element={<PerformanceMetrics userRole="admin" />} />
-              <Route path="" element={<Navigate to="users" replace />} />
+              <Route path="performance" element={<PerformanceMetrics userRole="admin" userId={profile.id} />} />
+              <Route path="templates" element={<ResponseTemplates userRole="admin" userId={profile.id} />} />
+              <Route path="ai-assistant" element={<TicketAIAssistant userRole="admin" />} />
+              <Route path="" element={<Navigate to="tickets" replace />} />
             </Route>
           )}
           {profile?.role === 'support' && (
@@ -223,6 +227,8 @@ function AppContent() {
               <Route path="tickets" element={<TicketList userRole="support" />} />
               <Route path="tickets/:ticketId" element={<TicketDetails userRole="support" />} />
               <Route path="performance" element={<PerformanceMetrics userRole="support" userId={profile.id} />} />
+              <Route path="templates" element={<ResponseTemplates userRole="support" userId={profile.id} />} />
+              <Route path="ai-assistant" element={<TicketAIAssistant userRole="support" />} />
               <Route path="" element={<Navigate to="tickets" replace />} />
             </Route>
           )}
