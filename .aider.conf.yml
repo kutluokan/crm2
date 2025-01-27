@@ -1,8 +1,9 @@
-# Global parameters
 auto-commits: false
 yes-always: true
+stream: false
+detect-urls: false
+multiline: true
+lint: true
 
-# Model-specific configuration
-model: aider/extra_params
 extra_body:
  reasoning_effort: high
