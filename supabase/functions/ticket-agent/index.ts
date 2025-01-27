@@ -4,7 +4,9 @@ import { OpenAI } from 'https://esm.sh/openai@4.20.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, Authorization',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 }
 
 interface TicketAction {
@@ -14,9 +16,48 @@ interface TicketAction {
   note?: string;
 }
 
+async function searchRelevantDocuments(query: string, openai: OpenAI, supabaseClient: any) {
+  try {
+    // Generate embedding for the query
+    const embeddingResponse = await openai.embeddings.create({
+      model: 'text-embedding-ada-002',
+      input: query,
+    });
+
+    const embedding = embeddingResponse.data[0].embedding;
+
+    // Search for similar documents
+    const { data: documents, error: searchError } = await supabaseClient.rpc(
+      'match_documents',
+      {
+        query_embedding: embedding,
+        match_threshold: 0.7,
+        match_count: 5
+      }
+    );
+
+    if (searchError) {
+      console.error('Error searching documents:', searchError);
+      return null;
+    }
+
+    return documents;
+  } catch (error) {
+    console.error('Error in searchRelevantDocuments:', error);
+    return null;
+  }
+}
+
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { 
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/plain',
+        'Content-Length': '0',
+      }
+    })
   }
 
   try {
@@ -70,6 +111,25 @@ serve(async (req) => {
       type: msg.is_internal ? 'internal' : 'customer',
     }))
 
+    // Search for relevant documents
+    const relevantDocs = await searchRelevantDocuments(instruction, openai, supabaseClient);
+    
+    // Get any uploaded files related to this ticket
+    const { data: ticketFiles, error: filesError } = await supabaseClient
+      .from('documents')
+      .select('content, filename, metadata')
+      .eq('ticket_id', ticketId);
+
+    if (filesError) {
+      console.error('Error fetching ticket files:', filesError);
+    }
+
+    // Combine relevant documents and files
+    const allContext = [
+      ...(relevantDocs || []).map(doc => doc.content),
+      ...(ticketFiles || []).map(file => `File ${file.filename}:\n${file.content}`)
+    ];
+
     // Parse instruction using OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
@@ -77,14 +137,51 @@ serve(async (req) => {
         {
           role: 'system',
           content: `You are a ticket management AI agent. Your task is to understand user instructions and convert them into actionable ticket updates.
-          
-Available actions:
-- Update status (open, in_progress, resolved, closed)
-- Update priority (low, medium, high, urgent)
-- Add or remove tags
-- Generate summary
-- Close ticket (sets status to closed)
-- Post internal note (use type: "post_note" with a note field)
+
+IMPORTANT: You must respond with ONLY a valid JSON object, with no additional text or explanation. The response must be parseable by JSON.parse().
+
+Required JSON format:
+{
+  "actions": [
+    {
+      "type": "status",
+      "value": "in_progress"
+    }
+  ],
+  "message": "A clear message explaining what actions were taken"
+}
+
+Available actions and their formats:
+1. Update status:
+   { "type": "status", "value": "open" | "in_progress" | "resolved" | "closed" }
+
+2. Update priority:
+   { "type": "priority", "value": "low" | "medium" | "high" | "urgent" }
+
+3. Add tags:
+   { "type": "tags", "tags": ["tag1", "tag2"] }
+
+4. Generate summary:
+   { "type": "summary" }
+   When generating a summary:
+   - Analyze the conversation history
+   - Create a concise summary of:
+     * Main issue/request
+     * Key points discussed
+     * Current status/progress
+     * Any pending actions
+   - Add as an internal note
+
+5. Close ticket:
+   { "type": "close" }
+
+6. Post internal note:
+   { "type": "post_note", "note": "Your note text here" }
+
+When asked to summarize or provide a summary:
+1. Always use the "summary" action type
+2. The summary will be automatically added as an internal note
+3. Include a clear message explaining that you've generated the summary
 
 Current ticket state:
 ${JSON.stringify(ticket, null, 2)}
@@ -92,45 +189,68 @@ ${JSON.stringify(ticket, null, 2)}
 Ticket conversation:
 ${JSON.stringify(formattedMessages, null, 2)}
 
-You must respond with ONLY a valid JSON object containing the actions to take. Example:
-{
-  "actions": [
-    {
-      "type": "status",
-      "value": "in_progress"
-    },
-    {
-      "type": "post_note",
-      "note": "Summarized conversation: Customer reported login issues..."
-    }
-  ],
-  "message": "I'll update the ticket status to in progress and add a summary note."
-}
+Relevant context from knowledge base and files:
+${allContext.join('\n\n')}
 
-When asked to summarize messages:
-1. Analyze the conversation history
-2. Create a concise summary including:
-   - Main issue/request
-   - Key points discussed
-   - Current status/progress
-   - Any pending actions
-3. Post this as an internal note using the post_note action
-
-Do not include any other text in your response, only the JSON object.`,
+CRITICAL REQUIREMENTS:
+1. Respond with ONLY the JSON object
+2. Include a clear "message" explaining the actions
+3. Ensure all action types and values match the formats above exactly
+4. Do not include any text, markdown, or explanation outside the JSON object
+5. The response must be valid JSON that can be parsed by JSON.parse()
+6. When asked for a summary, ALWAYS use the "summary" action type`,
         },
         {
           role: 'user',
           content: instruction,
         },
       ],
-      temperature: 0,
+      temperature: 0
     })
 
     let response;
     try {
-      response = JSON.parse(completion.choices[0].message.content)
+      const content = completion.choices[0].message.content.trim();
+      response = JSON.parse(content);
+      
+      // Validate response format
+      if (!response.actions || !Array.isArray(response.actions) || !response.message) {
+        throw new Error('Invalid response format: missing required fields');
+      }
+
+      // Validate each action
+      for (const action of response.actions) {
+        if (!action.type) {
+          throw new Error('Invalid action: missing type');
+        }
+        
+        switch (action.type) {
+          case 'status':
+            if (!['open', 'in_progress', 'resolved', 'closed'].includes(action.value)) {
+              throw new Error(`Invalid status value: ${action.value}`);
+            }
+            break;
+          case 'priority':
+            if (!['low', 'medium', 'high', 'urgent'].includes(action.value)) {
+              throw new Error(`Invalid priority value: ${action.value}`);
+            }
+            break;
+          case 'tags':
+            if (!Array.isArray(action.tags)) {
+              throw new Error('Invalid tags: must be an array');
+            }
+            break;
+          case 'post_note':
+            if (!action.note || typeof action.note !== 'string') {
+              throw new Error('Invalid note: missing or invalid format');
+            }
+            break;
+        }
+      }
     } catch (error) {
-      throw new Error('Failed to parse AI response as JSON')
+      console.error('AI response parsing error:', error);
+      console.error('Raw response:', completion.choices[0].message.content);
+      throw new Error(`Failed to parse AI response: ${error.message}`);
     }
 
     // Execute actions
@@ -173,15 +293,49 @@ Do not include any other text in your response, only the JSON object.`,
           break
 
         case 'summary':
-          // Call the existing summarize function
-          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/summarize-ticket`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            },
-            body: JSON.stringify({ ticketId }),
-          })
+          // Generate summary using OpenAI
+          const summaryCompletion = await openai.chat.completions.create({
+            model: 'gpt-3.5-turbo',
+            messages: [
+              {
+                role: 'system',
+                content: `Create a concise summary of this ticket conversation. Focus on:
+- Main issue/request
+- Key points discussed
+- Current status/progress
+- Any pending actions or next steps
+Be clear and professional.`
+              },
+              {
+                role: 'user',
+                content: `Ticket state: ${JSON.stringify(ticket, null, 2)}\n\nConversation: ${JSON.stringify(formattedMessages, null, 2)}`
+              }
+            ],
+            temperature: 0.7,
+          });
+
+          const summary = summaryCompletion.choices[0].message.content;
+
+          // Add the summary as an internal note
+          const { error: summaryError } = await supabaseClient
+            .from('ticket_messages')
+            .insert({
+              ticket_id: ticketId,
+              user_id: userId,
+              message: summary,
+              is_internal: true,
+              is_system: true,
+            });
+          
+          if (summaryError) throw summaryError;
+
+          // Update the ticket's AI summary field
+          const { error: updateError } = await supabaseClient
+            .from('tickets')
+            .update({ ai_summary: summary })
+            .eq('id', ticketId);
+          
+          if (updateError) throw updateError;
           break
 
         case 'close':
@@ -219,9 +373,11 @@ Do not include any other text in your response, only the JSON object.`,
       },
     )
   } catch (error) {
+    console.error('Function error:', error);
     return new Response(
       JSON.stringify({
         error: error.message,
+        details: error instanceof Error ? error.stack : undefined
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

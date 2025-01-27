@@ -46,15 +46,17 @@ serve(async (req) => {
     const relevantDocs = await embedAndSearch(lastMessage);
     
     // Get any uploaded files related to the user's tickets
+    const { data: userTickets } = await supabaseClient
+      .from('tickets')
+      .select('id')
+      .eq('customer_id', user.id);
+
+    const ticketIds = userTickets?.map(t => t.id) || [];
+
     const { data: ticketFiles, error: filesError } = await supabaseClient
       .from('documents')
       .select('content, filename, metadata')
-      .filter('ticket_id', 'in', (
-        await supabaseClient
-          .from('tickets')
-          .select('id')
-          .eq('customer_id', user.id)
-      ).data?.map(t => t.id) || []);
+      .in('ticket_id', ticketIds);
 
     if (filesError) {
       console.error('Error fetching ticket files:', filesError);
@@ -90,7 +92,24 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful customer support AI assistant. Help users with their questions and create support tickets when necessary.'
+            content: `You are a helpful customer support AI assistant. Your primary responsibilities are:
+
+1. Help users with their questions using the provided knowledge base
+2. Create support tickets for:
+   - Any technical issues or problems
+   - Account-related issues (login, password, access)
+   - Feature requests or suggestions
+   - Bugs or errors
+   - Any issue that can't be immediately resolved
+   - Complex questions requiring human support
+
+When creating a ticket, always explicitly state "I'll create a support ticket for you" in your response.
+
+Remember:
+- Be empathetic and professional
+- Create tickets proactively - don't wait for customers to ask
+- Better to create a ticket than risk missing an issue
+- Always create a ticket if there's any uncertainty about the resolution`
           },
           contextMessage,
           ...conversationHistory
@@ -141,7 +160,9 @@ serve(async (req) => {
     // Determine if we need to create a ticket
     const needsTicket = responseContent.toLowerCase().includes('create a ticket') || 
                        responseContent.toLowerCase().includes('submit a ticket') ||
-                       responseContent.toLowerCase().includes('open a ticket');
+                       responseContent.toLowerCase().includes('open a ticket') ||
+                       responseContent.toLowerCase().includes("i'll create a support ticket") ||
+                       responseContent.toLowerCase().includes("i'll create a ticket");
 
     let ticketSummary = null;
     if (needsTicket) {
@@ -175,9 +196,86 @@ serve(async (req) => {
 
       const ticketResult = await ticketResponse.json();
       try {
-        ticketSummary = JSON.parse(ticketResult.choices[0].message.content);
+        const parsedTicket = JSON.parse(ticketResult.choices[0].message.content);
+        if (!parsedTicket || typeof parsedTicket !== 'object' || !parsedTicket.title || !parsedTicket.description) {
+          throw new Error('Invalid ticket format from AI');
+        }
+
+        ticketSummary = parsedTicket;
+        
+        // Create the ticket in the database
+        const { data: ticket, error: ticketError } = await supabaseClient
+          .from('tickets')
+          .insert({
+            title: parsedTicket.title,
+            description: parsedTicket.description,
+            status: 'open',
+            priority: 'medium',
+            customer_id: user.id,
+            source: 'ai_chat'
+          })
+          .select()
+          .single();
+
+        if (ticketError) {
+          throw ticketError;
+        }
+
+        // Add the initial message
+        const { error: messageError } = await supabaseClient
+          .from('ticket_messages')
+          .insert({
+            ticket_id: ticket.id,
+            user_id: user.id,
+            message: conversationHistory[conversationHistory.length - 1].content,
+            is_system: false,
+            is_internal: false
+          });
+
+        if (messageError) {
+          throw messageError;
+        }
+
+        // Add AI's response as a system message
+        const { error: aiMessageError } = await supabaseClient
+          .from('ticket_messages')
+          .insert({
+            ticket_id: ticket.id,
+            user_id: user.id,
+            message: responseContent,
+            is_system: true,
+            is_internal: false
+          });
+
+        if (aiMessageError) {
+          throw aiMessageError;
+        }
+
+        // Add the summary as an internal note
+        if (summary) {
+          const { error: summaryError } = await supabaseClient
+            .from('ticket_messages')
+            .insert({
+              ticket_id: ticket.id,
+              user_id: user.id,
+              message: summary,
+              is_system: true,
+              is_internal: true
+            });
+
+          if (summaryError) {
+            throw summaryError;
+          }
+        }
+
+        ticketSummary = {
+          title: parsedTicket.title,
+          description: parsedTicket.description,
+          ticketId: ticket.id
+        };
       } catch (e) {
-        console.error('Failed to parse ticket summary:', e);
+        console.error('Failed to handle ticket creation:', e);
+        throw new Error('Failed to create ticket: ' + e.message);
       }
     }
 
