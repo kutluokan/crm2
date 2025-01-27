@@ -1,11 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import OpenAI from 'https://esm.sh/openai@4.24.1'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
+import { corsHeaders } from '../_shared/cors.ts'
+import { embedAndSearch } from '../_shared/embeddings.ts'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -31,11 +27,6 @@ serve(async (req) => {
       throw new Error('Missing OpenAI API key');
     }
 
-    const openai = new OpenAI({
-      apiKey: openaiApiKey,
-    });
-
-    // Parse request body
     const { messages } = await req.json();
     if (!messages || !Array.isArray(messages)) {
       throw new Error('Invalid messages format');
@@ -50,99 +41,157 @@ serve(async (req) => {
       throw new Error('Invalid authentication');
     }
 
-    // Try to fetch knowledge base documents if the table exists
-    let knowledgeBase = [];
-    try {
-      const { data: documents, error: docsError } = await supabaseClient
-        .from('knowledge_base')
-        .select('content')
-        .limit(5);
-
-      if (!docsError && documents) {
-        knowledgeBase = documents;
-      }
-    } catch (error) {
-      console.log('Knowledge base not available:', error);
-      // Continue without knowledge base
-    }
-
-    // Create system message with context
-    const systemMessage = {
-      role: 'system',
-      content: `You are a helpful customer support AI assistant. ${knowledgeBase.length ? `You have access to the following knowledge base documents:
-${knowledgeBase.map((doc, i) => `Document ${i + 1}: ${doc.content}`).join('\n')}` : 'The knowledge base is currently empty.'}
-
-Your goal is to help customers resolve their issues. If you cannot resolve the issue, you MUST explicitly say "I'll create a support ticket for you" in your response.
-
-When to create a ticket:
-1. If the issue is complex and requires human intervention
-2. If the solution isn't found in the knowledge base
-3. If the customer has tried the suggested solutions without success
-
-Remember: You MUST include the exact phrase "I'll create a support ticket for you" if you determine a ticket is needed.`
-    }
-
-    // Get AI response
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [systemMessage, ...messages],
-      temperature: 0.7,
-      max_tokens: 500,
-    });
-
-    if (!completion.choices[0].message) {
-      throw new Error('No response from OpenAI');
-    }
-
-    const aiResponse = completion.choices[0].message.content;
+    // Get relevant documents using existing RAG system
+    const lastMessage = messages[messages.length - 1].content;
+    const relevantDocs = await embedAndSearch(lastMessage);
     
-    // Determine if we need to create a ticket
-    const shouldCreateTicket = aiResponse.toLowerCase().includes("i'll create a support ticket for you") ||
-      aiResponse.toLowerCase().includes("i will create a support ticket for you");
+    // Get any uploaded files related to the user's tickets
+    const { data: ticketFiles, error: filesError } = await supabaseClient
+      .from('documents')
+      .select('content, filename, metadata')
+      .filter('ticket_id', 'in', (
+        await supabaseClient
+          .from('tickets')
+          .select('id')
+          .eq('customer_id', user.id)
+      ).data?.map(t => t.id) || []);
 
-    let ticketSummary = null;
-    if (shouldCreateTicket) {
-      // Get a concise summary for the ticket
-      const summaryCompletion = await openai.chat.completions.create({
-        model: 'gpt-4',
+    if (filesError) {
+      console.error('Error fetching ticket files:', filesError);
+    }
+
+    // Combine relevant documents and files
+    const allContext = [
+      ...(relevantDocs || []).map(doc => doc.content),
+      ...(ticketFiles || []).map(file => `File ${file.filename}:\n${file.content}`)
+    ];
+    
+    // Format conversation history and context for OpenAI
+    const conversationHistory = messages.map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+
+    // Add context from RAG and files
+    const contextMessage = {
+      role: 'system',
+      content: `Relevant context from our knowledge base and uploaded files:\n${allContext.join('\n\n')}`
+    };
+
+    // Call OpenAI API for chat response
+    const chatResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
         messages: [
           {
             role: 'system',
-            content: `You are a support ticket summarizer. Create two parts:
-1. Title: A very concise title (max 50 chars)
-2. Description: A clear, professional summary of the issue that will be the first message in the ticket. Include:
-   - The main problem
-   - Any relevant technical details
-   - What has been tried (if anything)
-   - Why this needs human support
-Format your response as a JSON object: {"title": "...", "description": "..."}`
+            content: 'You are a helpful customer support AI assistant. Help users with their questions and create support tickets when necessary.'
           },
-          ...messages
+          contextMessage,
+          ...conversationHistory
         ],
         temperature: 0.7,
-        max_tokens: 500,
+      }),
+    });
+
+    if (!chatResponse.ok) {
+      throw new Error(`OpenAI API error: ${chatResponse.statusText}`);
+    }
+
+    const aiResponse = await chatResponse.json();
+    const responseContent = aiResponse.choices[0].message.content;
+
+    // Generate conversation summary for internal use
+    const summaryResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'Create a concise internal summary of this customer conversation. Focus on key points, customer needs, and any actions taken or needed.'
+          },
+          ...conversationHistory,
+          {
+            role: 'assistant',
+            content: responseContent
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 250,
+      }),
+    });
+
+    if (!summaryResponse.ok) {
+      throw new Error(`OpenAI API error: ${summaryResponse.statusText}`);
+    }
+
+    const summaryResult = await summaryResponse.json();
+    const summary = summaryResult.choices[0].message.content;
+
+    // Determine if we need to create a ticket
+    const needsTicket = responseContent.toLowerCase().includes('create a ticket') || 
+                       responseContent.toLowerCase().includes('submit a ticket') ||
+                       responseContent.toLowerCase().includes('open a ticket');
+
+    let ticketSummary = null;
+    if (needsTicket) {
+      // Generate ticket title and description
+      const ticketResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: 'Create a concise ticket title and description based on the conversation. Return in JSON format with "title" and "description" fields.'
+            },
+            ...conversationHistory,
+            {
+              role: 'assistant',
+              content: responseContent
+            }
+          ],
+          temperature: 0.7,
+        }),
       });
 
+      if (!ticketResponse.ok) {
+        throw new Error(`OpenAI API error: ${ticketResponse.statusText}`);
+      }
+
+      const ticketResult = await ticketResponse.json();
       try {
-        ticketSummary = JSON.parse(summaryCompletion.choices[0].message?.content || '{}');
+        ticketSummary = JSON.parse(ticketResult.choices[0].message.content);
       } catch (e) {
-        console.error('Error parsing summary:', e);
-        ticketSummary = {
-          title: 'Support Needed',
-          description: 'Customer requires assistance with their issue. A support representative will review the conversation history and assist you further.'
-        };
+        console.error('Failed to parse ticket summary:', e);
       }
     }
 
-    console.log('AI Response:', aiResponse);
-    console.log('Should create ticket:', shouldCreateTicket);
+    console.log('AI Response:', responseContent);
+    console.log('Should create ticket:', needsTicket);
     console.log('Ticket Summary:', ticketSummary);
+    console.log('Internal Summary:', summary);
 
     return new Response(
       JSON.stringify({
-        content: aiResponse,
-        createTicket: shouldCreateTicket,
-        ticketSummary
+        content: responseContent,
+        createTicket: needsTicket,
+        ticketSummary,
+        internalSummary: summary
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -150,7 +199,7 @@ Format your response as a JSON object: {"title": "...", "description": "..."}`
       }
     )
   } catch (error) {
-    console.error('Edge function error:', error);
+    console.error('Function error:', error);
     
     return new Response(
       JSON.stringify({ 
@@ -159,7 +208,7 @@ Format your response as a JSON object: {"title": "...", "description": "..."}`
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
+        status: 500,
       }
     )
   }

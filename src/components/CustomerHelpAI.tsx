@@ -82,7 +82,7 @@ export function CustomerHelpAI() {
     }
   };
 
-  const createTicket = async (conversation: Message[], summary: { title: string; description: string }) => {
+  const createTicket = async (conversation: Message[], summary: { title: string; description: string }, internalSummary: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No authenticated user');
@@ -113,15 +113,23 @@ export function CustomerHelpAI() {
       // Add the summary as the first message
       const { error: messageError } = await supabase
         .from('ticket_messages')
-        .insert([{
-          ticket_id: ticket.id,
-          user_id: user.id,
-          message: summary.description,
-          is_internal: false
-        }]);
+        .insert([
+          {
+            ticket_id: ticket.id,
+            user_id: user.id,
+            message: summary.description,
+            is_internal: false
+          },
+          {
+            ticket_id: ticket.id,
+            user_id: user.id,
+            message: internalSummary,
+            is_internal: true
+          }
+        ]);
 
       if (messageError) {
-        console.error('Error adding summary message:', messageError);
+        console.error('Error adding messages:', messageError);
       }
 
       toast({
@@ -187,7 +195,7 @@ export function CustomerHelpAI() {
       // If ticket creation is needed, create it and navigate
       if (data.createTicket && data.ticketSummary) {
         const allMessages = [...messages, userMessage, aiMessage];
-        const ticket = await createTicket(allMessages, data.ticketSummary);
+        const ticket = await createTicket(allMessages, data.ticketSummary, data.internalSummary);
         
         if (ticket) {
           const ticketMessage: Message = { 
