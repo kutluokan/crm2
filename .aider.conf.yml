@@ -1,0 +1,8 @@
+# Global parameters
+auto-commits: false
+yes-always: true
+
+# Model-specific configuration
+model: aider/extra_params
+extra_body:
+ reasoning_effort: high
