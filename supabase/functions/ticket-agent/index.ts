@@ -132,7 +132,7 @@ serve(async (req) => {
 
     // Parse instruction using OpenAI
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -295,7 +295,7 @@ CRITICAL REQUIREMENTS:
         case 'summary':
           // Generate summary using OpenAI
           const summaryCompletion = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-4o-mini',
             messages: [
               {
                 role: 'system',

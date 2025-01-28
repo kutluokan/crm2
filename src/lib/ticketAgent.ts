@@ -243,7 +243,7 @@ class SuggestResponseTool extends StructuredTool {
       };
 
       const model = new ChatOpenAI({
-        modelName: 'gpt-4-turbo-preview',
+        modelName: 'gpt-4o-mini',
         temperature: 0.7,
       });
 
@@ -330,7 +330,7 @@ const tools = [
 
 // Initialize the agent
 const model = new ChatOpenAI({
-  modelName: 'gpt-4-turbo-preview',
+  modelName: 'gpt-4o-mini',
   temperature: 0,
   openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
