@@ -5,7 +5,7 @@ import { AgentExecutor, createOpenAIFunctionsAgent } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { StructuredTool } from "@langchain/core/tools";
 import { Client } from "langsmith";
-import { BaseCallbackHandler } from "@langchain/core/callbacks";
+import { ConsoleCallbackHandler } from "langchain/callbacks";
 import { z } from "zod";
 
 // Add type declarations for environment
@@ -151,6 +151,60 @@ class AddInternalNoteTool extends StructuredTool {
   }
 }
 
+class GetTicketDetailsTool extends StructuredTool {
+  name = "getTicketDetails";
+  description = "Gets detailed information about a ticket including its history";
+  schema = z.object({
+    ticketId: z.string()
+  });
+
+  constructor(private supabaseClient: any) {
+    super();
+  }
+
+  async _call(args: { ticketId: string }) {
+    const { data, error } = await this.supabaseClient
+      .from('tickets')
+      .select(`
+        *,
+        customer:profiles!tickets_customer_id_fkey(id, full_name),
+        ticket_messages(*)
+      `)
+      .eq('id', args.ticketId)
+      .single();
+    
+    if (error) throw error;
+    return JSON.stringify(data);
+  }
+}
+
+class SendResponseTool extends StructuredTool {
+  name = "sendResponse";
+  description = "Sends a response message to the customer";
+  schema = z.object({
+    ticketId: z.string(),
+    message: z.string()
+  });
+
+  constructor(private supabaseClient: any) {
+    super();
+  }
+
+  async _call(args: { ticketId: string; message: string }) {
+    const { error } = await this.supabaseClient
+      .from('ticket_messages')
+      .insert({
+        ticket_id: args.ticketId,
+        message: args.message,
+        is_internal: false,
+        is_system: true
+      });
+    
+    if (error) throw error;
+    return `Successfully sent response to ticket ${args.ticketId}`;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -171,15 +225,17 @@ serve(async (req) => {
 
     // Create tools
     const tools = [
+      new GetTicketDetailsTool(supabaseClient),
       new UpdateTicketStatusTool(supabaseClient),
       new UpdateTicketPriorityTool(supabaseClient),
       new AddTicketTagsTool(supabaseClient),
-      new AddInternalNoteTool(supabaseClient)
+      new AddInternalNoteTool(supabaseClient),
+      new SendResponseTool(supabaseClient)
     ];
 
     // Create chat model
     const model = new ChatOpenAI({
-      modelName: "gpt-4o-mini",
+      modelName: "gpt-4",
       temperature: 0,
       openAIApiKey: Deno.env.get('OPENAI_API_KEY'),
     });
@@ -187,13 +243,20 @@ serve(async (req) => {
     // Create prompt
     const prompt = ChatPromptTemplate.fromMessages([
       ["system", `You are a helpful AI assistant for managing support tickets. Your capabilities:
-1. Update ticket status (open, in_progress, resolved, closed)
-2. Update ticket priority (low, medium, high, urgent)
-3. Add tags to tickets
-4. Add internal notes
+1. Get ticket details and history
+2. Update ticket status (open, in_progress, resolved, closed)
+3. Update ticket priority (low, medium, high, urgent)
+4. Add tags to tickets
+5. Add internal notes
+6. Send responses to customers
 
 Important rules:
-- Always check if tickets exist before performing any action
+- Always check ticket details before taking any action
+- When resolving tickets:
+  1. Review the ticket history
+  2. Update the status appropriately
+  3. Add a closing note if needed
+  4. Notify the customer
 - Provide clear error messages when operations fail
 - Format responses in a clear, readable way
 - Never make assumptions about ticket status - always check
@@ -215,6 +278,21 @@ Remember to handle errors gracefully and provide clear feedback to the user.`],
     const agentExecutor = new AgentExecutor({
       agent,
       tools,
+      verbose: true,
+      callbacks: [
+        new ConsoleCallbackHandler(),
+        {
+          handleToolStart: async (tool: any, input: string) => {
+            console.log(`Starting tool ${tool.name} with input:`, input);
+          },
+          handleToolEnd: async (output: string) => {
+            console.log('Tool output:', output);
+          },
+          handleAgentAction: async (action: any) => {
+            console.log('Agent action:', action);
+          }
+        }
+      ],
       tags: ["ticket-agent"],
       metadata: {
         ticketId,
@@ -222,44 +300,6 @@ Remember to handle errors gracefully and provide clear feedback to the user.`],
         userId,
       },
     });
-
-    // Create a custom callback handler for tracing
-    class TracingCallbackHandler extends BaseCallbackHandler {
-      name = "TracingHandler";
-
-      async handleLLMStart(llm: any, prompts: string[]) {
-        console.log("Starting LLM:", llm.name);
-        console.log("Prompts:", prompts);
-      }
-
-      async handleLLMEnd(output: any) {
-        console.log("LLM finished with output:", output);
-      }
-
-      async handleToolStart(tool: any, input: string) {
-        console.log("Starting tool:", tool.name, "with input:", input);
-      }
-
-      async handleToolEnd(output: any) {
-        console.log("Tool finished with output:", output);
-      }
-
-      async handleChainStart(chain: any, inputs: Record<string, any>) {
-        console.log("Starting chain:", chain.name, "with inputs:", inputs);
-      }
-
-      async handleChainEnd(outputs: Record<string, any>) {
-        console.log("Chain finished with outputs:", outputs);
-      }
-
-      async handleAgentAction(action: any) {
-        console.log("Agent executing action:", action.tool);
-      }
-
-      async handleAgentEnd() {
-        console.log("Agent finished");
-      }
-    }
 
     // Execute agent with tracing
     const result = await agentExecutor.invoke(
@@ -269,18 +309,68 @@ Remember to handle errors gracefully and provide clear feedback to the user.`],
         userId,
       },
       {
-        callbacks: [new TracingCallbackHandler()],
+        callbacks: [
+          {
+            handleChainStart: async (chain: any, inputs: any) => {
+              console.log('Chain started:', chain.name, inputs);
+            },
+            handleChainEnd: async (outputs: any) => {
+              console.log('Chain ended:', outputs);
+            },
+            handleLLMStart: async (llm: any, prompts: string[]) => {
+              console.log('LLM started with prompts:', prompts);
+            },
+            handleLLMEnd: async (output: any) => {
+              console.log('LLM output:', output);
+            }
+          }
+        ],
+        runName: `Ticket ${ticketId} - ${instruction}`,
         metadata: {
           ticketId,
           userRole,
           userId,
+          instruction
         },
-        tags: ["ticket-agent"],
+        tags: ["ticket-agent"]
       }
     );
 
+    // Verify tool execution
+    let actionTaken = false;
+    if (result.intermediateSteps) {
+      for (const step of result.intermediateSteps) {
+        if (step.action && step.action.tool) {
+          actionTaken = true;
+          break;
+        }
+      }
+    }
+
+    // If no action was taken, inform the user
+    if (!actionTaken) {
+      return new Response(
+        JSON.stringify({ 
+          message: "I understood your request but wasn't able to take any action. Please try rephrasing your instruction.",
+          success: false
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
+
     return new Response(
-      JSON.stringify({ message: result.output }),
+      JSON.stringify({ 
+        message: result.output,
+        success: true,
+        actions: result.intermediateSteps?.map(step => ({
+          tool: step.action?.tool,
+          input: step.action?.toolInput,
+          output: step.observation
+        }))
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
