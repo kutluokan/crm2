@@ -77,52 +77,61 @@ serve(async (req) => {
       throw new Error('Unauthorized: Only admin and support roles can use the AI agent')
     }
 
-    // Get current ticket data
-    const { data: ticket, error: ticketError } = await supabaseClient
-      .from('tickets')
-      .select(`
-        *,
-        customer:profiles!tickets_customer_id_fkey(id, full_name),
-        tags:ticket_tags(
-          tag:tags(id, name, color)
-        )
-      `)
-      .eq('id', ticketId)
-      .single()
+    let ticket = null;
+    let messages = [];
+    let formattedMessages = [];
 
-    if (ticketError) throw ticketError
+    // Only fetch ticket data if not in general mode
+    if (ticketId !== 'general') {
+      // Get current ticket data
+      const { data: ticketData, error: ticketError } = await supabaseClient
+        .from('tickets')
+        .select(`
+          *,
+          customer:profiles!tickets_customer_id_fkey(id, full_name),
+          tags:ticket_tags(
+            tag:tags(id, name, color)
+          )
+        `)
+        .eq('id', ticketId)
+        .single()
 
-    // Get ticket messages
-    const { data: messages, error: messagesError } = await supabaseClient
-      .from('ticket_messages')
-      .select(`
-        *,
-        user:profiles!ticket_messages_user_id_fkey(full_name)
-      `)
-      .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: true })
+      if (ticketError) throw ticketError
+      ticket = ticketData;
 
-    if (messagesError) throw messagesError
+      // Get ticket messages
+      const { data: messageData, error: messagesError } = await supabaseClient
+        .from('ticket_messages')
+        .select(`
+          *,
+          user:profiles!ticket_messages_user_id_fkey(full_name)
+        `)
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true })
 
-    // Format messages for better context
-    const formattedMessages = messages.map(msg => ({
-      ...msg,
-      from: msg.user?.full_name || 'System',
-      type: msg.is_internal ? 'internal' : 'customer',
-    }))
+      if (messagesError) throw messagesError
+      messages = messageData;
+
+      // Format messages for better context
+      formattedMessages = messages.map(msg => ({
+        ...msg,
+        from: msg.user?.full_name || 'System',
+        type: msg.is_internal ? 'internal' : 'customer',
+      }))
+    }
 
     // Search for relevant documents
-    const relevantDocs = await searchRelevantDocuments(instruction, openai, supabaseClient);
+    const relevantDocs = ticketId !== 'general' ? 
+      await searchRelevantDocuments(instruction, openai, supabaseClient) : 
+      [];
     
     // Get any uploaded files related to this ticket
-    const { data: ticketFiles, error: filesError } = await supabaseClient
-      .from('documents')
-      .select('content, filename, metadata')
-      .eq('ticket_id', ticketId);
-
-    if (filesError) {
-      console.error('Error fetching ticket files:', filesError);
-    }
+    const ticketFiles = ticketId !== 'general' ? 
+      (await supabaseClient
+        .from('documents')
+        .select('content, filename, metadata')
+        .eq('ticket_id', ticketId))?.data || [] : 
+      [];
 
     // Combine relevant documents and files
     const allContext = [
@@ -136,8 +145,36 @@ serve(async (req) => {
       messages: [
         {
           role: 'system',
-          content: `You are a ticket management AI agent. Your task is to understand user instructions and convert them into actionable ticket updates.
+          content: ticketId === 'general' ? `
+You are a helpful AI assistant for managing support tickets. Your capabilities:
+1. View all tickets and their details
+2. Update ticket status (open, in_progress, resolved, closed)
+3. Update ticket priority (low, medium, high, urgent)
+4. Get detailed information about specific tickets
+5. Delete tickets when they are no longer needed
+6. Suggest appropriate responses
+7. Send responses to customers
 
+Important rules:
+- Always check if tickets exist before performing any action
+- Provide clear error messages when operations fail
+- When listing tickets, always specify the count
+- Format responses in a clear, readable way
+- If no tickets are found, explicitly state that
+- Never make assumptions about ticket status - always check
+- Be careful with delete operations - they cannot be undone
+- When suggesting responses, maintain a professional and empathetic tone
+- Before sending a response, make sure it addresses the customer's concerns
+
+Remember to handle errors gracefully and provide clear feedback to the user.
+
+IMPORTANT: You must respond with ONLY a valid JSON object, with no additional text or explanation. The response must be parseable by JSON.parse().
+
+Required JSON format:
+{
+  "actions": [],
+  "message": "A clear message explaining what actions were taken or providing information"
+}` : `
 IMPORTANT: You must respond with ONLY a valid JSON object, with no additional text or explanation. The response must be parseable by JSON.parse().
 
 Required JSON format:
@@ -190,15 +227,7 @@ Ticket conversation:
 ${JSON.stringify(formattedMessages, null, 2)}
 
 Relevant context from knowledge base and files:
-${allContext.join('\n\n')}
-
-CRITICAL REQUIREMENTS:
-1. Respond with ONLY the JSON object
-2. Include a clear "message" explaining the actions
-3. Ensure all action types and values match the formats above exactly
-4. Do not include any text, markdown, or explanation outside the JSON object
-5. The response must be valid JSON that can be parsed by JSON.parse()
-6. When asked for a summary, ALWAYS use the "summary" action type`,
+${allContext.join('\n\n')}`
         },
         {
           role: 'user',
@@ -218,33 +247,36 @@ CRITICAL REQUIREMENTS:
         throw new Error('Invalid response format: missing required fields');
       }
 
-      // Validate each action
-      for (const action of response.actions) {
-        if (!action.type) {
-          throw new Error('Invalid action: missing type');
-        }
-        
-        switch (action.type) {
-          case 'status':
-            if (!['open', 'in_progress', 'resolved', 'closed'].includes(action.value)) {
-              throw new Error(`Invalid status value: ${action.value}`);
-            }
-            break;
-          case 'priority':
-            if (!['low', 'medium', 'high', 'urgent'].includes(action.value)) {
-              throw new Error(`Invalid priority value: ${action.value}`);
-            }
-            break;
-          case 'tags':
-            if (!Array.isArray(action.tags)) {
-              throw new Error('Invalid tags: must be an array');
-            }
-            break;
-          case 'post_note':
-            if (!action.note || typeof action.note !== 'string') {
-              throw new Error('Invalid note: missing or invalid format');
-            }
-            break;
+      // Skip action validation in general mode
+      if (ticketId !== 'general') {
+        // Validate each action
+        for (const action of response.actions) {
+          if (!action.type) {
+            throw new Error('Invalid action: missing type');
+          }
+          
+          switch (action.type) {
+            case 'status':
+              if (!['open', 'in_progress', 'resolved', 'closed'].includes(action.value)) {
+                throw new Error(`Invalid status value: ${action.value}`);
+              }
+              break;
+            case 'priority':
+              if (!['low', 'medium', 'high', 'urgent'].includes(action.value)) {
+                throw new Error(`Invalid priority value: ${action.value}`);
+              }
+              break;
+            case 'tags':
+              if (!Array.isArray(action.tags)) {
+                throw new Error('Invalid tags: must be an array');
+              }
+              break;
+            case 'post_note':
+              if (!action.note || typeof action.note !== 'string') {
+                throw new Error('Invalid note: missing or invalid format');
+              }
+              break;
+          }
         }
       }
     } catch (error) {
@@ -253,113 +285,116 @@ CRITICAL REQUIREMENTS:
       throw new Error(`Failed to parse AI response: ${error.message}`);
     }
 
-    // Execute actions
-    for (const action of response.actions) {
-      switch (action.type) {
-        case 'status':
-          await supabaseClient
-            .from('tickets')
-            .update({ status: action.value })
-            .eq('id', ticketId)
-          break
+    // Only execute actions if not in general mode
+    if (ticketId !== 'general') {
+      // Execute actions
+      for (const action of response.actions) {
+        switch (action.type) {
+          case 'status':
+            await supabaseClient
+              .from('tickets')
+              .update({ status: action.value })
+              .eq('id', ticketId)
+            break
 
-        case 'priority':
-          await supabaseClient
-            .from('tickets')
-            .update({ priority: action.value })
-            .eq('id', ticketId)
-          break
+          case 'priority':
+            await supabaseClient
+              .from('tickets')
+              .update({ priority: action.value })
+              .eq('id', ticketId)
+            break
 
-        case 'tags':
-          if (action.tags) {
-            // First get all available tags
-            const { data: availableTags } = await supabaseClient
-              .from('tags')
-              .select('*')
+          case 'tags':
+            if (action.tags) {
+              // First get all available tags
+              const { data: availableTags } = await supabaseClient
+                .from('tags')
+                .select('*')
 
-            // Add new tags
-            for (const tagName of action.tags) {
-              const tag = availableTags?.find(t => t.name.toLowerCase() === tagName.toLowerCase())
-              if (tag) {
-                await supabaseClient
-                  .from('ticket_tags')
-                  .upsert({
-                    ticket_id: ticketId,
-                    tag_id: tag.id,
-                  })
+              // Add new tags
+              for (const tagName of action.tags) {
+                const tag = availableTags?.find(t => t.name.toLowerCase() === tagName.toLowerCase())
+                if (tag) {
+                  await supabaseClient
+                    .from('ticket_tags')
+                    .upsert({
+                      ticket_id: ticketId,
+                      tag_id: tag.id,
+                    })
+                }
               }
             }
-          }
-          break
+            break
 
-        case 'summary':
-          // Generate summary using OpenAI
-          const summaryCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-              {
-                role: 'system',
-                content: `Create a concise summary of this ticket conversation. Focus on:
+          case 'summary':
+            // Generate summary using OpenAI
+            const summaryCompletion = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                {
+                  role: 'system',
+                  content: `Create a concise summary of this ticket conversation. Focus on:
 - Main issue/request
 - Key points discussed
 - Current status/progress
 - Any pending actions or next steps
 Be clear and professional.`
-              },
-              {
-                role: 'user',
-                content: `Ticket state: ${JSON.stringify(ticket, null, 2)}\n\nConversation: ${JSON.stringify(formattedMessages, null, 2)}`
-              }
-            ],
-            temperature: 0.7,
-          });
-
-          const summary = summaryCompletion.choices[0].message.content;
-
-          // Add the summary as an internal note
-          const { error: summaryError } = await supabaseClient
-            .from('ticket_messages')
-            .insert({
-              ticket_id: ticketId,
-              user_id: userId,
-              message: summary,
-              is_internal: true,
-              is_system: true,
+                },
+                {
+                  role: 'user',
+                  content: `Ticket state: ${JSON.stringify(ticket, null, 2)}\n\nConversation: ${JSON.stringify(formattedMessages, null, 2)}`
+                }
+              ],
+              temperature: 0.7,
             });
-          
-          if (summaryError) throw summaryError;
 
-          // Update the ticket's AI summary field
-          const { error: updateError } = await supabaseClient
-            .from('tickets')
-            .update({ ai_summary: summary })
-            .eq('id', ticketId);
-          
-          if (updateError) throw updateError;
-          break
+            const summary = summaryCompletion.choices[0].message.content;
 
-        case 'close':
-          await supabaseClient
-            .from('tickets')
-            .update({ status: 'closed' })
-            .eq('id', ticketId)
-          break
-
-        case 'post_note':
-          if (action.note) {
-            const { error: noteError } = await supabaseClient
+            // Add the summary as an internal note
+            const { error: summaryError } = await supabaseClient
               .from('ticket_messages')
               .insert({
                 ticket_id: ticketId,
                 user_id: userId,
-                message: action.note,
+                message: summary,
                 is_internal: true,
                 is_system: true,
-              })
+              });
             
-            if (noteError) throw noteError
-          }
-          break
+            if (summaryError) throw summaryError;
+
+            // Update the ticket's AI summary field
+            const { error: updateError } = await supabaseClient
+              .from('tickets')
+              .update({ ai_summary: summary })
+              .eq('id', ticketId);
+            
+            if (updateError) throw updateError;
+            break
+
+          case 'close':
+            await supabaseClient
+              .from('tickets')
+              .update({ status: 'closed' })
+              .eq('id', ticketId)
+            break
+
+          case 'post_note':
+            if (action.note) {
+              const { error: noteError } = await supabaseClient
+                .from('ticket_messages')
+                .insert({
+                  ticket_id: ticketId,
+                  user_id: userId,
+                  message: action.note,
+                  is_internal: true,
+                  is_system: true,
+                })
+              
+              if (noteError) throw noteError
+            }
+            break
+        }
       }
     }
 
