@@ -77,6 +77,86 @@ serve(async (req) => {
       throw new Error('Unauthorized: Only admin and support roles can use the AI agent')
     }
 
+    // For general mode, get all tickets for context
+    if (ticketId === 'general') {
+      const { data: allTickets, error: ticketsError } = await supabaseClient
+        .from('tickets')
+        .select(`
+          *,
+          customer:profiles!tickets_customer_id_fkey(id, full_name),
+          tags:ticket_tags(
+            tag:tags(id, name, color)
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (ticketsError) {
+        throw new Error('Failed to fetch tickets: ' + ticketsError.message);
+      }
+
+      // Parse instruction using OpenAI
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a helpful AI assistant for managing support tickets. Your capabilities:
+1. View all tickets and their details
+2. Update ticket status (open, in_progress, resolved, closed)
+3. Update ticket priority (low, medium, high, urgent)
+4. Get detailed information about specific tickets
+5. Delete tickets when they are no longer needed
+6. Suggest appropriate responses
+7. Send responses to customers
+
+Important rules:
+- Always check if tickets exist before performing any action
+- Provide clear error messages when operations fail
+- When listing tickets, always specify the count
+- Format responses in a clear, readable way
+- If no tickets are found, explicitly state that
+- Never make assumptions about ticket status - always check
+- Be careful with delete operations - they cannot be undone
+- When suggesting responses, maintain a professional and empathetic tone
+- Before sending a response, make sure it addresses the customer's concerns
+
+Current tickets:
+${JSON.stringify(allTickets, null, 2)}
+
+Remember to handle errors gracefully and provide clear feedback to the user.
+
+IMPORTANT: You must respond with ONLY a valid JSON object, with no additional text or explanation. The response must be parseable by JSON.parse().
+
+Required JSON format:
+{
+  "actions": [],
+  "message": "A clear message explaining what actions were taken or providing information"
+}`
+          },
+          {
+            role: 'user',
+            content: instruction,
+          },
+        ],
+        temperature: 0
+      });
+
+      const content = completion.choices[0].message.content.trim();
+      const response = JSON.parse(content);
+
+      return new Response(
+        JSON.stringify({
+          message: response.message,
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        },
+      );
+    }
+
+    // Regular ticket mode
     let ticket = null;
     let messages = [];
     let formattedMessages = [];
