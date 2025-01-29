@@ -10,7 +10,11 @@ import {
 } from '@chakra-ui/react';
 import { createTicketAgent } from '../lib/ticketAgent';
 
-export function TicketAIAgent() {
+interface TicketAIAgentProps {
+  userRole: 'admin' | 'support';
+}
+
+export function TicketAIAgent({ userRole }: TicketAIAgentProps) {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,7 +24,7 @@ export function TicketAIAgent() {
   useEffect(() => {
     async function initAgent() {
       try {
-        const ticketAgent = await createTicketAgent();
+        const ticketAgent = await createTicketAgent(userRole);
         setAgent(ticketAgent);
       } catch (error) {
         console.error('Error initializing agent:', error);
