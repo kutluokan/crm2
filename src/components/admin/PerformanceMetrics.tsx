@@ -7,7 +7,6 @@ import {
   StatNumber,
   StatHelpText,
   Heading,
-  VStack,
   HStack,
   Select,
   Progress,

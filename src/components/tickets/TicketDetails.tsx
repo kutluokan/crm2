@@ -1,16 +1,9 @@
-import { useEffect, useState, useContext, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Box,
-  VStack,
   HStack,
-  Text,
-  Badge,
   Heading,
-  Divider,
-  Select,
-  useToast,
-  Button,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -19,25 +12,8 @@ import {
   ModalBody,
   useDisclosure,
   IconButton,
-  Wrap,
-  WrapItem,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
-  PopoverArrow,
-  Input,
-  useColorModeValue,
-  FormControl,
-  FormLabel,
-  Switch,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuGroup,
-  MenuItem,
 } from '@chakra-ui/react';
-import { FiEdit2, FiPlus, FiX, FiChevronDown } from 'react-icons/fi';
+import { FiEdit2 } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
 import TicketChat from '../TicketChat';
 import { EditTicket } from './EditTicket';
@@ -48,11 +24,6 @@ interface Tag {
   id: string;
   name: string;
   color: string;
-}
-
-interface User {
-  id: string;
-  email: string;
 }
 
 interface Ticket {
@@ -70,13 +41,6 @@ interface Ticket {
   tags: Tag[];
 }
 
-interface Template {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-}
-
 interface TicketDetailsProps {
   ticketId: string;
   userRole: 'admin' | 'support' | 'customer';
@@ -89,14 +53,8 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [customerEmail, setCustomerEmail] = useState<string>('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#808080');
-  const toast = useToast();
   const editDisclosure = useDisclosure();
-  const tagDisclosure = useDisclosure();
-  const colorModeValue = useColorModeValue('gray.800', 'white');
-
+  
   useEffect(() => {
     if (!effectiveTicketId) {
       console.error('No ticket ID provided');
@@ -106,7 +64,6 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     console.log('Using ticket ID:', effectiveTicketId);
     fetchTicketDetails();
     getCurrentUser();
-    fetchAvailableTags();
 
     const channel = setupTicketSubscription();
     
@@ -152,8 +109,8 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       const transformedTicket = {
         ...ticket,
         tags: ticket.tags
-          ?.map(t => t.tag)
-          .filter(Boolean) || []
+          ?.map((t: { tag: Tag }) => t.tag)
+          .filter((tag: Tag | null): tag is Tag => tag !== null) || []
       };
 
       setTicket(transformedTicket);
@@ -164,7 +121,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           .rpc('get_users');
         
         if (!userError && userData) {
-          const user = userData.find(u => u.id === ticket.customer.id);
+          const user = userData.find((u: { id: string, email: string }) => u.id === ticket.customer.id);
           if (user?.email) {
             setCustomerEmail(user.email);
           }
@@ -175,154 +132,20 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     }
   }
 
-  async function fetchAvailableTags() {
-    try {
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-      setAvailableTags(data);
-    } catch (error) {
-      console.error('Error fetching tags:', error);
-      toast({
-        title: 'Error fetching tags',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
-  async function createTag() {
-    if (!newTagName.trim()) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('tags')
-        .insert({
-          name: newTagName.trim(),
-          color: newTagColor,
-          created_by: currentUserId
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setAvailableTags([...availableTags, data]);
-      setNewTagName('');
-      setNewTagColor('#808080');
-      
-      toast({
-        title: 'Tag created successfully',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error creating tag:', error);
-      toast({
-        title: 'Error creating tag',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
-  async function addTagToTicket(tagId: string) {
-    try {
-      const { error } = await supabase
-        .from('ticket_tags')
-        .insert({
-          ticket_id: effectiveTicketId,
-          tag_id: tagId,
-          created_by: currentUserId
-        });
-
-      if (error) throw error;
-
-      // Update local state
-      const newTag = availableTags.find(t => t.id === tagId);
-      if (newTag && ticket) {
-        setTicket({
-          ...ticket,
-          tags: [...ticket.tags, newTag]
-        });
-      }
-
-      toast({
-        title: 'Tag added successfully',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error adding tag:', error);
-      toast({
-        title: 'Error adding tag',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
-  async function removeTagFromTicket(tagId: string) {
-    try {
-      const { error } = await supabase
-        .from('ticket_tags')
-        .delete()
-        .eq('ticket_id', effectiveTicketId)
-        .eq('tag_id', tagId);
-
-      if (error) throw error;
-
-      // Update local state
-      if (ticket) {
-        setTicket({
-          ...ticket,
-          tags: ticket.tags.filter(t => t.id !== tagId)
-        });
-      }
-
-      toast({
-        title: 'Tag removed successfully',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error removing tag:', error);
-      toast({
-        title: 'Error removing tag',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
   function setupTicketSubscription(): RealtimeChannel {
-    const channel = supabase
-      .channel(`ticket-${ticketId}`)
+    const channel = supabase.channel(`ticket:${effectiveTicketId}`);
+    
+    channel
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'tickets',
-          filter: `id=eq.${ticketId}`
+          filter: `id=eq.${effectiveTicketId}`
         },
-        async (payload) => {
-          console.log('Real-time ticket update:', payload);
-          
-          if (payload.eventType === 'UPDATE') {
-            // Update the ticket state with the new data
-            setTicket(current => current ? { ...current, ...payload.new } : null);
-          } else if (payload.eventType === 'DELETE') {
-            // Handle ticket deletion - maybe show a message and close the detail view
-            toast({
-              title: 'Ticket has been deleted',
-              status: 'warning',
-              duration: 3000,
-            });
-          }
+        () => {
+          fetchTicketDetails();
         }
       )
       .subscribe();
@@ -330,100 +153,11 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     return channel;
   }
 
-  async function updateTicketStatus(newStatus: string) {
-    try {
-      const { error } = await supabase
-        .from('tickets')
-        .update({ status: newStatus })
-        .eq('id', effectiveTicketId);
-
-      if (error) throw error;
-
-      setTicket(ticket => ticket ? { ...ticket, status: newStatus } : null);
-
-      toast({
-        title: 'Status updated successfully',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error updating ticket status:', error);
-      toast({
-        title: 'Error updating status',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
-  async function handleCustomerCloseTicket() {
-    try {
-      const { error } = await supabase
-        .from('tickets')
-        .update({ status: 'closed' })
-        .eq('id', effectiveTicketId);
-
-      if (error) throw error;
-
-      setTicket(ticket => ticket ? { ...ticket, status: 'closed' } : null);
-
-      toast({
-        title: 'Ticket closed successfully',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error closing ticket:', error);
-      toast({
-        title: 'Error closing ticket',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
-  async function updateTicketPriority(newPriority: string) {
-    try {
-      const { error } = await supabase
-        .from('tickets')
-        .update({ priority: newPriority })
-        .eq('id', effectiveTicketId);
-
-      if (error) throw error;
-
-      setTicket(ticket => ticket ? { ...ticket, priority: newPriority } : null);
-
-      toast({
-        title: 'Priority updated successfully',
-        status: 'success',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error updating priority:', error);
-      toast({
-        title: 'Error updating priority',
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  }
-
-  function getPriorityColor(priority: string) {
-    switch (priority) {
-      case 'urgent': return 'red';
-      case 'high': return 'orange';
-      case 'medium': return 'yellow';
-      case 'low': return 'green';
-      default: return 'gray';
-    }
-  }
+  const canEdit = userRole === 'customer' && ticket?.customer?.id === currentUserId;
 
   if (!ticket) {
-    return <Box p={6}>Loading ticket details...</Box>;
+    return null;
   }
-
-  const canEdit = userRole === 'customer' && currentUserId === ticket.customer.id;
-  const canManageTags = userRole === 'admin' || userRole === 'support';
 
   return (
     <Box height="100vh" display="flex" flexDirection="column">
@@ -471,7 +205,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         <Box flex="1" display="flex" flexDirection="column">
           <Box flex="1" overflowY="auto">
             <TicketChat
-              ticketId={effectiveTicketId}
+              ticketId={effectiveTicketId || ''}
               currentUserId={currentUserId}
               isSupport={userRole !== 'customer'}
             />

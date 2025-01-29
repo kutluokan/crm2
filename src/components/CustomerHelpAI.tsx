@@ -82,70 +82,6 @@ export function CustomerHelpAI() {
     }
   };
 
-  const createTicket = async (conversation: Message[], summary: { title: string; description: string }, internalSummary: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No authenticated user');
-
-      // Create a ticket with summary
-      const { data: ticket, error } = await supabase
-        .from('tickets')
-        .insert([{
-          title: summary.title,
-          description: summary.description,
-          status: 'open',
-          priority: 'medium',
-          source: 'ai_assistant',
-          customer_id: user.id
-        }])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Ticket creation error:', error);
-        throw error;
-      }
-      
-      if (!ticket) {
-        throw new Error('No ticket returned after creation');
-      }
-
-      // Add only the regular summary message
-      const { error: messageError } = await supabase
-        .from('ticket_messages')
-        .insert([{
-          ticket_id: ticket.id,
-          user_id: user.id,
-          message: summary.description,
-          is_internal: false
-        }]);
-
-      if (messageError) {
-        console.error('Error adding messages:', messageError);
-      }
-
-      toast({
-        title: 'Ticket Created',
-        description: 'Support ticket has been created successfully.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-
-      return ticket;
-    } catch (error) {
-      console.error('Error creating ticket:', error);
-      toast({
-        title: 'Error creating ticket',
-        description: 'Failed to create support ticket. Please try again.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-      return null;
-    }
-  };
-
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -184,42 +120,29 @@ export function CustomerHelpAI() {
       const aiMessage: Message = { role: 'assistant', content: data.content };
       setMessages(prev => [...prev, aiMessage]);
       
-      // If ticket creation is needed, create it and navigate
+      // If ticket was created, show message and navigate
       if (data.createTicket && data.ticketSummary) {
-        const allMessages = [...messages, userMessage, aiMessage];
-        const ticket = await createTicket(allMessages, data.ticketSummary, data.internalSummary);
+        const ticketMessage: Message = { 
+          role: 'assistant', 
+          content: `I've created a support ticket (#${data.ticketSummary.ticketId}) for you with the title: "${data.ticketSummary.title}". Redirecting you to the ticket page...` 
+        };
+        setMessages(prev => [...prev, ticketMessage]);
         
-        if (ticket) {
-          const ticketMessage: Message = { 
-            role: 'assistant', 
-            content: `I've created a support ticket (#${ticket.id}) for you with the title: "${data.ticketSummary.title}". Redirecting you to the ticket page...` 
-          };
-          setMessages(prev => [...prev, ticketMessage]);
-          
-          // Wait a moment to show the message before redirecting
-          setTimeout(() => {
-            navigate(`/customer/tickets/${ticket.id}`);
-          }, 2000);
-        }
+        // Wait a moment to show the message before redirecting
+        setTimeout(() => {
+          navigate(`/tickets/${data.ticketSummary.ticketId}`);
+        }, 2000);
       }
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI response';
-      const errorResponse: Message = { 
-        role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please try again later.' 
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: 'I apologize, but I encountered an error processing your request. Please try again or contact support if the issue persists.'
       };
-      setMessages(prev => [...prev, errorResponse]);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (

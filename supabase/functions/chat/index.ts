@@ -1,7 +1,15 @@
+// @ts-ignore: Deno types
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+// @ts-ignore: Deno types
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { corsHeaders } from '../_shared/cors.ts'
 import { embedAndSearch } from '../_shared/embeddings.ts'
+
+interface TicketSummary {
+  title: string;
+  description: string;
+  ticketId?: string;
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -16,12 +24,16 @@ serve(async (req) => {
     }
 
     // Initialize Supabase client
+    // @ts-ignore: Deno env
     const supabaseClient = createClient(
+      // @ts-ignore: Deno env
       Deno.env.get('SUPABASE_URL') ?? '',
+      // @ts-ignore: Deno env
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     // Initialize OpenAI
+    // @ts-ignore: Deno env
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
       throw new Error('Missing OpenAI API key');
@@ -164,7 +176,7 @@ Remember:
                        responseContent.toLowerCase().includes("i'll create a support ticket") ||
                        responseContent.toLowerCase().includes("i'll create a ticket");
 
-    let ticketSummary = null;
+    let ticketSummary: TicketSummary | null = null;
     if (needsTicket) {
       // Generate ticket title and description
       const ticketResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -178,7 +190,7 @@ Remember:
           messages: [
             {
               role: 'system',
-              content: 'Create a concise ticket title and description based on the conversation. Return in JSON format with "title" and "description" fields.'
+              content: 'Create a concise ticket title and description based on the conversation. Format your response as a valid JSON object with exactly two fields: "title" and "description". Do not include any markdown formatting or backticks. Example format: {"title": "Issue title here", "description": "Description here"}'
             },
             ...conversationHistory,
             {
@@ -186,7 +198,7 @@ Remember:
               content: responseContent
             }
           ],
-          temperature: 0.7,
+          temperature: 0.3,
         }),
       });
 
@@ -221,34 +233,19 @@ Remember:
           throw ticketError;
         }
 
-        // Add the initial message
+        // Add only the summary message
         const { error: messageError } = await supabaseClient
           .from('ticket_messages')
           .insert({
             ticket_id: ticket.id,
             user_id: user.id,
-            message: conversationHistory[conversationHistory.length - 1].content,
-            is_system: false,
+            message: parsedTicket.description,
+            is_system: true,
             is_internal: false
           });
 
         if (messageError) {
           throw messageError;
-        }
-
-        // Add AI's response as a system message
-        const { error: aiMessageError } = await supabaseClient
-          .from('ticket_messages')
-          .insert({
-            ticket_id: ticket.id,
-            user_id: user.id,
-            message: responseContent,
-            is_system: true,
-            is_internal: false
-          });
-
-        if (aiMessageError) {
-          throw aiMessageError;
         }
 
         // Remove the internal summary section
