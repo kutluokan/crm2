@@ -17,6 +17,11 @@ frontend:
         - key: 'Cache-Control'
           value: 'no-cache'
   redirects:
-    - source: '</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$)([^.]+$)/'
+    - source: '/<*>'
+      target: '/index.html'
+      status: '200'
+      condition: null
+  rewrites:
+    - source: '</^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|ttf|map|json)$)([^.]+$)>'
       target: '/index.html'
       status: '200' 
