@@ -394,10 +394,14 @@ ${allContext.join('\n\n')}`
       for (const action of response.actions) {
         switch (action.type) {
           case 'status':
-            await supabaseClient
+            const { error: statusError } = await supabaseClient
               .from('tickets')
               .update({ status: action.value })
-              .eq('id', ticketId)
+              .eq('id', ticketId);
+            
+            if (statusError) {
+              throw new Error(`Failed to update ticket status: ${statusError.message}`);
+            }
             break
 
           case 'priority':

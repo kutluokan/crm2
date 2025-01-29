@@ -47,11 +47,12 @@ export function TicketAIAgent({ ticketId, userRole, onUpdate }: TicketAIAgentPro
         })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
 
       toast({
         title: 'Action completed',
