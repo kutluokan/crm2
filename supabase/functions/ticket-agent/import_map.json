@@ -6,6 +6,7 @@
     "langchain/agents": "https://esm.sh/langchain@0.1.21/agents",
     "@langchain/core/prompts": "https://esm.sh/@langchain/core@0.1.48/prompts",
     "@langchain/core/tools": "https://esm.sh/@langchain/core@0.1.48/tools",
+    "@langchain/core/callbacks": "https://esm.sh/@langchain/core@0.1.48/callbacks/base",
     "langsmith": "https://esm.sh/langsmith@0.1.68",
     "zod": "https://esm.sh/zod@3.22.4"
   },

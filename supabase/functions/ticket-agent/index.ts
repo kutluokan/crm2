@@ -5,6 +5,7 @@ import { AgentExecutor, createOpenAIFunctionsAgent } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { StructuredTool } from "@langchain/core/tools";
 import { Client } from "langsmith";
+import { BaseCallbackHandler } from "@langchain/core/callbacks";
 import { z } from "zod";
 
 // Add type declarations for environment
@@ -23,12 +24,19 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 }
 
+// Configure LangSmith
+const langsmithClient = new Client({
+  apiUrl: "https://api.smith.langchain.com",
+  apiKey: Deno.env.get('LANGCHAIN_API_KEY'),
+});
+
 // Configure tracing globally
 globalThis.process = {
   env: {
     LANGCHAIN_TRACING_V2: "true",
     LANGCHAIN_API_KEY: Deno.env.get('LANGCHAIN_API_KEY'),
-    LANGCHAIN_PROJECT: Deno.env.get('LANGCHAIN_PROJECT'),
+    LANGCHAIN_PROJECT: "crm2",
+    LANGCHAIN_ENDPOINT: "https://api.smith.langchain.com",
   },
 } as any;
 
@@ -203,19 +211,73 @@ Remember to handle errors gracefully and provide clear feedback to the user.`],
       prompt,
     });
 
-    // Create executor
+    // Create executor with tracing
     const agentExecutor = new AgentExecutor({
       agent,
       tools,
-      callbacks: [tracer],
+      tags: ["ticket-agent"],
+      metadata: {
+        ticketId,
+        userRole,
+        userId,
+      },
     });
 
-    // Execute agent
-    const result = await agentExecutor.invoke({
-      input: instruction,
-      ticketId,
-      userId,
-    });
+    // Create a custom callback handler for tracing
+    class TracingCallbackHandler extends BaseCallbackHandler {
+      name = "TracingHandler";
+
+      async handleLLMStart(llm: any, prompts: string[]) {
+        console.log("Starting LLM:", llm.name);
+        console.log("Prompts:", prompts);
+      }
+
+      async handleLLMEnd(output: any) {
+        console.log("LLM finished with output:", output);
+      }
+
+      async handleToolStart(tool: any, input: string) {
+        console.log("Starting tool:", tool.name, "with input:", input);
+      }
+
+      async handleToolEnd(output: any) {
+        console.log("Tool finished with output:", output);
+      }
+
+      async handleChainStart(chain: any, inputs: Record<string, any>) {
+        console.log("Starting chain:", chain.name, "with inputs:", inputs);
+      }
+
+      async handleChainEnd(outputs: Record<string, any>) {
+        console.log("Chain finished with outputs:", outputs);
+      }
+
+      async handleAgentAction(action: any) {
+        console.log("Agent executing action:", action.tool);
+      }
+
+      async handleAgentEnd() {
+        console.log("Agent finished");
+      }
+    }
+
+    // Execute agent with tracing
+    const result = await agentExecutor.invoke(
+      {
+        input: instruction,
+        ticketId,
+        userId,
+      },
+      {
+        callbacks: [new TracingCallbackHandler()],
+        metadata: {
+          ticketId,
+          userRole,
+          userId,
+        },
+        tags: ["ticket-agent"],
+      }
+    );
 
     return new Response(
       JSON.stringify({ message: result.output }),
