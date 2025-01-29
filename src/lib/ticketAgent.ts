@@ -330,84 +330,17 @@ const model = new ChatOpenAI({
 });
 
 export async function createTicketAgent(userRole: 'admin' | 'support') {
-  const systemMessage = `You are a helpful AI assistant for managing support tickets. Your capabilities:
-1. View all tickets and their details (regardless of status)
-2. Update ticket status (open, in_progress, resolved, closed) - you can change any ticket to any status, including reopening resolved/closed tickets
-3. Update ticket priority (low, medium, high, urgent)
-4. Get detailed information about specific tickets
-5. Delete tickets when they are no longer needed
-6. Suggest appropriate responses based on ticket context
-7. Send responses to customers
-
-Important rules:
-- Always check if tickets exist before performing any action
-- You can change a ticket's status to any state regardless of its current status (e.g., reopening resolved tickets)
-- Provide clear error messages when operations fail
-- When listing tickets, always specify the count
-- Format responses in a clear, readable way
-- If no tickets are found, explicitly state that
-- Never make assumptions about ticket status - always check
-- Be careful with delete operations - they cannot be undone
-- When suggesting responses, maintain a professional and empathetic tone
-- Before sending a response, make sure it addresses the customer's concerns
-- Your role is ${userRole}, act accordingly with appropriate permissions
-
-Remember to handle errors gracefully and provide clear feedback to the user.`;
-
-  const prompt = ChatPromptTemplate.fromMessages([
-    ["system", systemMessage],
-    ["human", "{input}"],
-    new MessagesPlaceholder("agent_scratchpad"),
-  ]);
-
-  const agent = await createOpenAIFunctionsAgent({
-    llm: model,
-    tools: tools,
-    prompt: prompt,
-  });
-
-  const executor = new AgentExecutor({
-    agent,
-    tools,
-    verbose: true,
-    tags: ["ticket_management"],
-    metadata: {
-      agentType: "ticket_management",
-      projectName: "crm2",
-    },
-    callbacks: [
-      new ConsoleCallbackHandler(),
-      tracer,
-    ],
-  });
+  const systemMessage = `You are a helpful AI assistant for managing support tickets.`;
 
   return {
     async processQuery(query: string) {
       try {
-        const result = await executor.invoke({ 
-          input: query,
-          tags: ["ticket_query"],
-          metadata: {
-            queryType: "ticket_management",
-            timestamp: new Date().toISOString(),
-          },
-          runName: "Ticket Management Query",
+        const { data, error } = await supabase.functions.invoke('ticket-agent', {
+          body: { query }
         });
 
-        // Try to parse and format the response if it's JSON
-        try {
-          const parsed = JSON.parse(result.output);
-          if (parsed.tickets) {
-            return `Found ${parsed.count} open ticket(s):\n${parsed.tickets.map((t: any) => 
-              `- Ticket #${t.id}: ${t.title} (${t.status}, ${t.priority}) - Customer: ${t.customer}`
-            ).join('\n')}`;
-          }
-          return `Ticket Details:\n${Object.entries(parsed).map(([k, v]) => 
-            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
-          ).join('\n')}`;
-        } catch {
-          return result.output;
-        }
+        if (error) throw error;
+        return data.result;
       } catch (error) {
         console.error('Error processing query:', error);
         throw error;
