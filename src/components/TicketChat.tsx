@@ -377,10 +377,25 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         });
       } else {
         // Regular message
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: { 
+            ticketId,
+            message: newMessage,
+            isInternal,
+            isRagQuery 
+          },
+        });
+
+        if (error) throw error;
+        
+        if (!data || typeof data.message !== 'string') {
+          throw new Error('Invalid response from chat function');
+        }
+
         await supabase.from('ticket_messages').insert({
           ticket_id: ticketId,
           user_id: currentUserId,
-          message: newMessage,
+          message: data.message,
           is_internal: isInternal,
         });
       }
