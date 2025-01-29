@@ -19,12 +19,6 @@ globalThis.process = {
 // Create tracer with environment variables
 const tracer = new LangChainTracer();
 
-interface TicketUpdateParams {
-  ticketId: string;
-  status?: 'open' | 'in_progress' | 'resolved' | 'closed';
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
-}
-
 class GetOpenTicketsTool extends StructuredTool {
   name = "getAllTickets";
   description = "Retrieves a list of all tickets regardless of their status. Returns an empty array if no tickets are found.";
@@ -165,7 +159,7 @@ class GetTicketDetailsTool extends StructuredTool {
         priority: data.priority,
         customer: data.customer?.full_name || 'Unknown',
         created_at: data.created_at,
-        tags: data.tags?.map(t => t.tag.name) || [],
+        tags: data.tags?.map((t: { tag: { name: string } }) => t.tag.name) || [],
         messages: data.ticket_messages?.length || 0
       });
     } catch (error) {

@@ -17,8 +17,10 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
     },
-    headers: {
-      'Accept': 'application/json',
+    global: {
+      headers: {
+        'Accept': 'application/json',
+      },
     },
   }
 );

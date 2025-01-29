@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { Box, Container, Spinner, Center } from '@chakra-ui/react'
 import { Auth } from './components/Auth'
 import { AdminDashboard } from './components/AdminDashboard'
@@ -215,7 +215,7 @@ function AppContent() {
             <Route path="/admin/*" element={<AdminDashboard />}>
               <Route path="users" element={<UserManagement />} />
               <Route path="tickets" element={<TicketList userRole="admin" />} />
-              <Route path="tickets/:ticketId" element={<TicketDetails userRole="admin" />} />
+              <Route path="tickets/:ticketId" element={<TicketDetailsWrapper userRole="admin" />} />
               <Route path="performance" element={<PerformanceMetrics userRole="admin" userId={profile.id} />} />
               <Route path="templates" element={<ResponseTemplates userRole="admin" userId={profile.id} />} />
               <Route path="ai-assistant" element={<TicketAIAssistant userRole="admin" />} />
@@ -225,7 +225,7 @@ function AppContent() {
           {profile?.role === 'support' && (
             <Route path="/support/*" element={<SupportDashboard />}>
               <Route path="tickets" element={<TicketList userRole="support" />} />
-              <Route path="tickets/:ticketId" element={<TicketDetails userRole="support" />} />
+              <Route path="tickets/:ticketId" element={<TicketDetailsWrapper userRole="support" />} />
               <Route path="performance" element={<PerformanceMetrics userRole="support" userId={profile.id} />} />
               <Route path="templates" element={<ResponseTemplates userRole="support" userId={profile.id} />} />
               <Route path="ai-assistant" element={<TicketAIAssistant userRole="support" />} />
@@ -235,7 +235,7 @@ function AppContent() {
           {profile?.role === 'customer' && (
             <Route path="/customer/*" element={<CustomerDashboard />}>
               <Route path="tickets" element={<TicketList userRole="customer" />} />
-              <Route path="tickets/:ticketId" element={<TicketDetails userRole="customer" />} />
+              <Route path="tickets/:ticketId" element={<TicketDetailsWrapper userRole="customer" />} />
               <Route path="help" element={<Box p={6}>Help & Support content here</Box>} />
               <Route path="" element={<Navigate to="tickets" replace />} />
             </Route>
@@ -253,6 +253,11 @@ function AppContent() {
       )}
     </Box>
   )
+}
+
+function TicketDetailsWrapper({ userRole }: { userRole: UserRole }) {
+  const { ticketId } = useParams();
+  return <TicketDetails userRole={userRole} ticketId={ticketId || ''} />;
 }
 
 export default function App() {
