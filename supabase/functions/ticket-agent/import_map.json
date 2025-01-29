@@ -2,7 +2,12 @@
   "imports": {
     "http/server": "https://deno.land/std@0.140.0/http/server.ts",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.38.4",
-    "openai": "https://esm.sh/openai@4.20.1"
+    "@langchain/openai": "https://esm.sh/@langchain/openai@0.0.23",
+    "langchain/agents": "https://esm.sh/langchain@0.1.21/agents",
+    "@langchain/core/prompts": "https://esm.sh/@langchain/core@0.1.48/prompts",
+    "@langchain/core/tools": "https://esm.sh/@langchain/core@0.1.48/tools",
+    "langsmith": "https://esm.sh/langsmith@0.1.68",
+    "zod": "https://esm.sh/zod@3.22.4"
   },
   "scopes": {
     "https://deno.land/": {
