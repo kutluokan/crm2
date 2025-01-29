@@ -55,19 +55,21 @@ interface TicketChatProps {
 interface Document {
   id: string;
   filename: string;
-  similarity: number;
+  similarity?: number;  // Optional since it's only used in search results
   ticket_id: string;
+  created_at: string;
 }
 
-interface DatabaseFile {
+interface SearchDocument extends Document {
+  similarity: number;  // Required in search results
+}
+
+interface DocumentRow {
   id: string;
   filename: string;
   ticket_id: string;
   created_at: string;
-  user_id: string;
 }
-
-interface File extends DatabaseFile {}
 
 type MessageWithProfile = {
   id: string;
@@ -83,16 +85,17 @@ type MessageWithProfile = {
 
 export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [isRagQuery, setIsRagQuery] = useState(false);
+  const [userRole, setUserRole] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
+  const [isTicketOwner, setIsTicketOwner] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
-  const [userRole, setUserRole] = useState<string>('');
-  const [userId, setUserId] = useState<string>('');
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
@@ -103,6 +106,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         await loadMessages();
         await fetchFiles();
         await getCurrentUser();
+        await checkTicketOwnership();
       }
     };
 
@@ -210,26 +214,26 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
   const fetchFiles = async () => {
     try {
       const { data, error } = await supabase
-        .from('files')
+        .from('documents')
         .select(`
           id,
           filename,
           ticket_id,
-          created_at,
-          user_id
+          created_at
         `)
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      setFiles((data || []).map(file => ({
+      const documents: Document[] = (data as DocumentRow[] || []).map(file => ({
         id: file.id,
         filename: file.filename,
         ticket_id: file.ticket_id,
-        created_at: file.created_at,
-        user_id: file.user_id
-      })));
+        created_at: file.created_at
+      }));
+
+      setFiles(documents);
     } catch (error) {
       console.error('Error fetching files:', error);
       toast({
@@ -253,6 +257,22 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       if (profile) {
         setUserRole(profile.role);
       }
+    }
+  };
+
+  const checkTicketOwnership = async () => {
+    if (!userId) return;
+    
+    try {
+      const { data: ticket } = await supabase
+        .from('tickets')
+        .select('customer_id')
+        .eq('id', ticketId)
+        .single();
+
+      setIsTicketOwner(ticket?.customer_id === userId);
+    } catch (error) {
+      console.error('Error checking ticket ownership:', error);
     }
   };
 
@@ -346,7 +366,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
 
         // Add AI response with document references
         const documentList = response.documents
-          .map((doc: Document) => `- ${doc.filename} (${Math.round(doc.similarity * 100)}% match)`)
+          .map((doc: SearchDocument) => `- ${doc.filename} (${Math.round(doc.similarity * 100)}% match)`)
           .join('\n');
 
         await supabase.from('ticket_messages').insert({
@@ -431,7 +451,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
   };
 
   const handleDeleteFile = async (fileId: string) => {
-    // Check permissions
+    // Check permissions based on ticket ownership instead of file ownership
     if (userRole !== 'admin' && userRole !== 'support') {
       const { data: ticket } = await supabase
         .from('tickets')
@@ -442,7 +462,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       if (!ticket || ticket.customer_id !== userId) {
         toast({
           title: 'Permission Denied',
-          description: 'You can only delete your own files',
+          description: 'You can only delete files from your own tickets',
           status: 'error',
           duration: 3000,
           isClosable: true,
@@ -451,40 +471,36 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       }
     }
 
-    try {
-      // Get file info first
-      const fileToDelete = files.find(f => f.id === fileId);
-      if (!fileToDelete) throw new Error('File not found');
+    const fileToDelete = files.find(f => f.id === fileId);
+    if (!fileToDelete) {
+      toast({
+        title: 'Error',
+        description: 'File not found',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
 
+    try {
       // Delete from storage first
       const { error: storageError } = await supabase.storage
         .from('documents')
         .remove([fileToDelete.filename]);
 
-      if (storageError) {
-        throw storageError;
-      }
+      if (storageError) throw storageError;
 
-      // Delete from database with proper constraints
+      // Delete from database
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
-        .match({ 
-          id: fileId, 
-          ticket_id: ticketId 
-        });
+        .match({ id: fileId, ticket_id: ticketId });
 
-      if (dbError) {
-        throw dbError;
-      }
+      if (dbError) throw dbError;
 
-      // Refresh files from server to ensure sync
       await fetchFiles();
-      
-      // Close modal if no files left
-      if (files.length <= 1) {
-        onClose();
-      }
+      if (files.length <= 1) onClose();
 
       toast({
         title: 'Success',
@@ -502,7 +518,6 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         duration: 3000,
         isClosable: true,
       });
-      // Refresh files to ensure UI is in sync
       await fetchFiles();
     }
   };
@@ -693,9 +708,9 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
                           if (files.length <= 1) onClose();
                         }}
                         isDisabled={
-                          userRole !== 'admin' &&
-                          userRole !== 'support' &&
-                          userId !== file.user_id
+                          userRole !== 'admin' && 
+                          userRole !== 'support' && 
+                          !isTicketOwner
                         }
                       >
                         Delete File
