@@ -43,13 +43,15 @@ interface Ticket {
 }
 
 interface TicketDetailsProps {
-  ticketId: string;
   userRole: 'admin' | 'support' | 'customer';
 }
 
-export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
-  const { ticketId: paramTicketId } = useParams();
-  const effectiveTicketId = ticketId || paramTicketId;
+export function TicketDetails({ userRole }: TicketDetailsProps) {
+  const { ticketId } = useParams<{ ticketId: string }>();
+
+  if (!ticketId) {
+    return <div>Ticket not found</div>;
+  }
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [customerEmail, setCustomerEmail] = useState<string>('');
@@ -57,12 +59,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   const editDisclosure = useDisclosure();
   
   useEffect(() => {
-    if (!effectiveTicketId) {
-      console.error('No ticket ID provided');
-      return;
-    }
-    
-    console.log('Using ticket ID:', effectiveTicketId);
+    console.log('Using ticket ID:', ticketId);
     fetchTicketDetails();
     getCurrentUser();
 
@@ -71,7 +68,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
     return () => {
       channel.unsubscribe();
     }
-  }, [effectiveTicketId]);
+  }, [ticketId]);
 
   async function getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -82,7 +79,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
 
   async function fetchTicketDetails() {
     try {
-      console.log('Fetching ticket:', effectiveTicketId);
+      console.log('Fetching ticket:', ticketId);
       
       const { data: ticket, error } = await supabase
         .from('tickets')
@@ -93,7 +90,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
             tag:tags(id, name, color)
           )
         `)
-        .eq('id', effectiveTicketId)
+        .eq('id', ticketId)
         .single();
 
       if (error) {
@@ -102,7 +99,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
       }
 
       if (!ticket) {
-        console.error('No ticket found with ID:', effectiveTicketId);
+        console.error('No ticket found with ID:', ticketId);
         return;
       }
 
@@ -134,7 +131,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
   }
 
   function setupTicketSubscription(): RealtimeChannel {
-    const channel = supabase.channel(`ticket:${effectiveTicketId}`);
+    const channel = supabase.channel(`ticket:${ticketId}`);
     
     channel
       .on(
@@ -143,7 +140,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
           event: '*',
           schema: 'public',
           table: 'tickets',
-          filter: `id=eq.${effectiveTicketId}`
+          filter: `id=eq.${ticketId}`
         },
         () => {
           fetchTicketDetails();
@@ -206,7 +203,7 @@ export function TicketDetails({ ticketId, userRole }: TicketDetailsProps) {
         <Box flex="1" display="flex" flexDirection="column">
           <Box flex="1" overflowY="auto">
             <TicketChat
-              ticketId={effectiveTicketId || ''}
+              ticketId={ticketId}
               currentUserId={currentUserId}
               isSupport={userRole !== 'customer'}
             />

@@ -3,7 +3,6 @@ yes-always: true
 stream: false
 detect-urls: false
 multiline: true
-lint: true
 
 extra_body:
  reasoning_effort: high

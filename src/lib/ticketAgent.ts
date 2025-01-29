@@ -329,9 +329,8 @@ const model = new ChatOpenAI({
   openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
 });
 
-// Create the prompt template
-const prompt = ChatPromptTemplate.fromMessages([
-  ["system", `You are a helpful AI assistant for managing support tickets. Your capabilities:
+export async function createTicketAgent(userRole: 'admin' | 'support') {
+  const systemMessage = `You are a helpful AI assistant for managing support tickets. Your capabilities:
 1. View all tickets and their details (regardless of status)
 2. Update ticket status (open, in_progress, resolved, closed) - you can change any ticket to any status, including reopening resolved/closed tickets
 3. Update ticket priority (low, medium, high, urgent)
@@ -351,13 +350,16 @@ Important rules:
 - Be careful with delete operations - they cannot be undone
 - When suggesting responses, maintain a professional and empathetic tone
 - Before sending a response, make sure it addresses the customer's concerns
+- Your role is ${userRole}, act accordingly with appropriate permissions
 
-Remember to handle errors gracefully and provide clear feedback to the user.`],
-  ["human", "{input}"],
-  new MessagesPlaceholder("agent_scratchpad"),
-]);
+Remember to handle errors gracefully and provide clear feedback to the user.`;
 
-export async function createTicketAgent() {
+  const prompt = ChatPromptTemplate.fromMessages([
+    ["system", systemMessage],
+    ["human", "{input}"],
+    new MessagesPlaceholder("agent_scratchpad"),
+  ]);
+
   const agent = await createOpenAIFunctionsAgent({
     llm: model,
     tools: tools,
