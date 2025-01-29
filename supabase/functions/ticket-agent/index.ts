@@ -1,6 +1,6 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
-import { OpenAI } from 'https://esm.sh/openai@4.20.1'
+import { serve } from "https://deno.land/std@0.140.0/http/server.ts";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { OpenAI } from "openai";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +14,14 @@ interface TicketAction {
   value?: string;
   tags?: string[];
   note?: string;
+}
+
+interface Message {
+  user: {
+    full_name: string;
+  };
+  is_internal: boolean;
+  [key: string]: any;
 }
 
 async function searchRelevantDocuments(query: string, openai: OpenAI, supabaseClient: any) {
@@ -47,6 +55,13 @@ async function searchRelevantDocuments(query: string, openai: OpenAI, supabaseCl
     return null;
   }
 }
+
+// Add type declarations for environment
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -142,7 +157,7 @@ Required JSON format:
         temperature: 0
       });
 
-      const content = completion.choices[0].message.content.trim();
+      const content = completion.choices[0]?.message?.content?.trim() ?? '';
       const response = JSON.parse(content);
 
       return new Response(
@@ -157,9 +172,17 @@ Required JSON format:
     }
 
     // Regular ticket mode
-    let ticket = null;
-    let messages = [];
-    let formattedMessages = [];
+    interface FormattedMessage {
+      from: string;
+      type: string;
+      user: { full_name: string };
+      is_internal: boolean;
+      [key: string]: any;
+    }
+
+    let ticket: any = null;
+    let messages: Message[] = [];
+    let formattedMessages: FormattedMessage[] = [];
 
     // Only fetch ticket data if not in general mode
     if (ticketId !== 'general') {
@@ -179,25 +202,25 @@ Required JSON format:
       if (ticketError) throw ticketError
       ticket = ticketData;
 
-      // Get ticket messages
-      const { data: messageData, error: messagesError } = await supabaseClient
+      // Get ticket messages with null check
+      const messageResponse = await supabaseClient
         .from('ticket_messages')
         .select(`
           *,
           user:profiles!ticket_messages_user_id_fkey(full_name)
         `)
         .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: true });
 
-      if (messagesError) throw messagesError
-      messages = messageData;
+      if (messageResponse.error) throw messageResponse.error;
+      messages = messageResponse.data ?? [];
 
       // Format messages for better context
-      formattedMessages = messages.map(msg => ({
+      formattedMessages = (messages as Message[]).map(msg => ({
         ...msg,
         from: msg.user?.full_name || 'System',
         type: msg.is_internal ? 'internal' : 'customer',
-      }))
+      })) as FormattedMessage[];
     }
 
     // Search for relevant documents
@@ -319,7 +342,7 @@ ${allContext.join('\n\n')}`
 
     let response;
     try {
-      const content = completion.choices[0].message.content.trim();
+      const content = completion.choices[0]?.message?.content?.trim() ?? '';
       response = JSON.parse(content);
       
       // Validate response format
@@ -361,7 +384,7 @@ ${allContext.join('\n\n')}`
       }
     } catch (error) {
       console.error('AI response parsing error:', error);
-      console.error('Raw response:', completion.choices[0].message.content);
+      console.error('Raw response:', completion.choices[0]?.message?.content);
       throw new Error(`Failed to parse AI response: ${error.message}`);
     }
 

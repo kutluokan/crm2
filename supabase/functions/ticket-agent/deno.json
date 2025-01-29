@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "lib": ["deno.ns", "deno.window", "esnext"],
+    "types": ["./deno.env.d.ts"],
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": true
+  },
+  "importMap": "./import_map.json",
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --watch index.ts",
+    "deploy": "deployctl deploy --project=myproject index.ts"
+  }
+} 
