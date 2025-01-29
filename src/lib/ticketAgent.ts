@@ -19,13 +19,7 @@ globalThis.process = {
 // Create tracer with environment variables
 const tracer = new LangChainTracer();
 
-interface TicketUpdateParams {
-  ticketId: string;
-  status?: 'open' | 'in_progress' | 'resolved' | 'closed';
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
-}
-
-class GetOpenTicketsTool extends StructuredTool {
+class GetAllTicketsTool extends StructuredTool {
   name = "getAllTickets";
   description = "Retrieves a list of all tickets regardless of their status. Returns an empty array if no tickets are found.";
   schema = z.object({});
@@ -66,10 +60,10 @@ class GetOpenTicketsTool extends StructuredTool {
 
 class UpdateTicketStatusTool extends StructuredTool {
   name = "updateTicketStatus";
-  description = "Updates the status of a specific ticket. Requires ticket ID and new status. Verify the ticket exists before updating. Returns error if ticket not found.";
+  description = "Updates the status of a specific ticket. Can change any ticket to any status (open, in_progress, resolved, closed) regardless of its current status. For example, resolved or closed tickets can be reopened. Requires ticket ID and new status. Returns error if ticket not found.";
   schema = z.object({
     ticketId: z.string().describe("The unique identifier of the ticket to update"),
-    status: z.enum(['open', 'in_progress', 'resolved', 'closed']).describe("The new status to set")
+    status: z.enum(['open', 'in_progress', 'resolved', 'closed']).describe("The new status to set - can be changed to any status regardless of current status")
   });
 
   async _call({ ticketId, status }: z.infer<typeof this.schema>) {
@@ -165,7 +159,7 @@ class GetTicketDetailsTool extends StructuredTool {
         priority: data.priority,
         customer: data.customer?.full_name || 'Unknown',
         created_at: data.created_at,
-        tags: data.tags?.map(t => t.tag.name) || [],
+        tags: data.tags?.map((t: { tag: { name: string } }) => t.tag.name) || [],
         messages: data.ticket_messages?.length || 0
       });
     } catch (error) {
@@ -319,7 +313,7 @@ class SendResponseTool extends StructuredTool {
 
 // Define ticket management tools
 const tools = [
-  new GetOpenTicketsTool(),
+  new GetAllTicketsTool(),
   new UpdateTicketStatusTool(),
   new UpdateTicketPriorityTool(),
   new GetTicketDetailsTool(),
@@ -339,7 +333,7 @@ const model = new ChatOpenAI({
 const prompt = ChatPromptTemplate.fromMessages([
   ["system", `You are a helpful AI assistant for managing support tickets. Your capabilities:
 1. View all tickets and their details (regardless of status)
-2. Update ticket status (open, in_progress, resolved, closed)
+2. Update ticket status (open, in_progress, resolved, closed) - you can change any ticket to any status, including reopening resolved/closed tickets
 3. Update ticket priority (low, medium, high, urgent)
 4. Get detailed information about specific tickets
 5. Delete tickets when they are no longer needed
@@ -348,6 +342,7 @@ const prompt = ChatPromptTemplate.fromMessages([
 
 Important rules:
 - Always check if tickets exist before performing any action
+- You can change a ticket's status to any state regardless of its current status (e.g., reopening resolved tickets)
 - Provide clear error messages when operations fail
 - When listing tickets, always specify the count
 - Format responses in a clear, readable way
