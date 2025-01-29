@@ -48,3 +48,65 @@ export default tseslint.config({
   },
 })
 ```
+
+## Deployment
+
+### Supabase Deployment
+
+1. Make sure you have a Supabase project created at [Supabase Dashboard](https://app.supabase.io)
+2. Get your project reference ID from the project settings
+3. Link your local project:
+   ```bash
+   npx supabase link --project-ref your-project-ref
+   ```
+4. Push your database changes:
+   ```bash
+   npx supabase db push
+   ```
+5. Deploy Edge Functions (if any):
+   ```bash
+   npx supabase functions deploy ticket-agent
+   ```
+6. Deploy your frontend to Vercel or Amplify (see AWS Amplify Deployment below)
+
+Note: Make sure you have the latest Supabase CLI installed:
+```bash
+npm install supabase --save-dev
+```
+
+### AWS Amplify Deployment
+
+1. Install AWS Amplify CLI:
+   ```bash
+   npm install -g @aws-amplify/cli
+   ```
+
+2. Configure AWS credentials:
+   ```bash
+   amplify configure
+   ```
+
+3. Initialize Amplify in your project:
+   ```bash
+   amplify init
+   ```
+
+4. Deploy to Amplify:
+   - Push your code to a Git repository (GitHub, GitLab, or BitBucket)
+   - Connect your repository in the AWS Amplify Console
+   - Amplify will automatically build and deploy your app using the `amplify.yml` configuration
+
+### Environment Variables
+
+Make sure to set these environment variables in both Supabase and AWS Amplify:
+
+```
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+VITE_OPENAI_API_KEY=your_openai_api_key
+VITE_LANGCHAIN_API_KEY=your_langchain_api_key
+VITE_LANGCHAIN_PROJECT=your_langchain_project
+```
+
+Note: Never commit sensitive environment variables to your repository.
