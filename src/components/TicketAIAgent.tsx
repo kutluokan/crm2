@@ -10,11 +10,7 @@ import {
 } from '@chakra-ui/react';
 import { createTicketAgent } from '../lib/ticketAgent';
 
-interface TicketAIAgentProps {
-  userRole: string;
-}
-
-export function TicketAIAgent({ userRole }: TicketAIAgentProps) {
+export function TicketAIAgent() {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);

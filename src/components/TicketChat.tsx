@@ -6,7 +6,6 @@ import {
   VStack,
   HStack,
   Text,
-  Avatar,
   Switch,
   FormControl,
   FormLabel,
@@ -30,12 +29,12 @@ import {
   Tooltip,
 } from '@chakra-ui/react';
 import { FiPaperclip, FiSearch, FiMoreVertical, FiTrash2, FiFile } from 'react-icons/fi';
-import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { Database } from '../types/supabase';
 
 interface UserProfile {
   full_name: string;
-  role: string;
+  role: Database['public']['Enums']['user_role'];
 }
 
 interface Message {
@@ -57,14 +56,30 @@ interface Document {
   id: string;
   filename: string;
   similarity: number;
+  ticket_id: string;
 }
 
-interface File {
+interface DatabaseFile {
   id: string;
   filename: string;
   ticket_id: string;
   created_at: string;
+  user_id: string;
 }
+
+interface File extends DatabaseFile {}
+
+type MessageWithProfile = {
+  id: string;
+  message: string;
+  created_at: string;
+  user_id: string;
+  is_internal: boolean;
+  profiles: {
+    full_name: string | null;
+    role: Database['public']['Enums']['user_role'];
+  };
+};
 
 export default function TicketChat({ ticketId, currentUserId, isSupport }: TicketChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -143,8 +158,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         return;
       }
 
-      // Create a new query each time
-      const query = supabase
+      const { data, error } = await supabase
         .from('ticket_messages')
         .select(`
           id,
@@ -152,7 +166,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
           created_at,
           user_id,
           is_internal,
-          profiles (
+          profiles!inner(
             full_name,
             role
           )
@@ -160,28 +174,23 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
 
-      // If not support/admin, filter out internal messages
-      if (!isSupport) {
-        query.eq('is_internal', false);
-      }
-
-      const { data, error } = await query;
-
       if (error) {
         console.error('Supabase query error:', error);
         throw error;
       }
       
       // Transform the data to ensure it matches our Message type
-      const transformedMessages: Message[] = (data || []).map(msg => ({
+      const rawMessages = data as unknown as MessageWithProfile[];
+
+      const transformedMessages: Message[] = rawMessages.map(msg => ({
         id: msg.id,
         message: msg.message,
         created_at: msg.created_at,
         user_id: msg.user_id,
         is_internal: msg.is_internal,
         user: {
-          full_name: msg.profiles?.full_name || 'Unknown User',
-          role: msg.profiles?.role || 'Unknown Role'
+          full_name: msg.profiles.full_name ?? '',
+          role: msg.profiles.role
         }
       }));
 
@@ -199,18 +208,36 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
   }
 
   const fetchFiles = async () => {
-    const { data, error } = await supabase
-      .from('documents')
-      .select('id, filename, ticket_id, created_at')
-      .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('files')
+        .select(`
+          id,
+          filename,
+          ticket_id,
+          created_at,
+          user_id
+        `)
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false });
 
-    if (error) {
+      if (error) throw error;
+
+      setFiles((data || []).map(file => ({
+        id: file.id,
+        filename: file.filename,
+        ticket_id: file.ticket_id,
+        created_at: file.created_at,
+        user_id: file.user_id
+      })));
+    } catch (error) {
       console.error('Error fetching files:', error);
-      return;
+      toast({
+        title: 'Error fetching files',
+        status: 'error',
+        duration: 3000,
+      });
     }
-
-    setFiles(data || []);
   };
 
   const getCurrentUser = async () => {
@@ -259,7 +286,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       // Process document and generate embeddings
       const { error: processError } = await supabase.functions
         .invoke('process-document', {
-          body: { documentId: document.id },
+          body: { documentId: document?.id },
         });
 
       if (processError) throw processError;

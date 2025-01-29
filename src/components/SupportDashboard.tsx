@@ -4,10 +4,9 @@ import {
   Flex,
 } from '@chakra-ui/react'
 import { supabase } from '../lib/supabase'
-import { useLocation, Navigate, Outlet } from 'react-router-dom'
+import { useLocation, Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiInbox, FiBarChart2, FiMessageSquare, FiCpu } from 'react-icons/fi'
-import { TicketList } from './tickets/TicketList'
 import { PerformanceMetrics } from './admin/PerformanceMetrics'
 import { ResponseTemplates } from './admin/ResponseTemplates'
 import { useState, useEffect } from 'react'
@@ -22,7 +21,6 @@ const sidebarItems = [
 export function SupportDashboard() {
   const location = useLocation()
   const [userId, setUserId] = useState<string>('')
-  const isTicketsPath = location.pathname.includes('/tickets')
   const isPerformancePath = location.pathname.includes('/performance')
   const isTemplatesPath = location.pathname.includes('/templates')
 
