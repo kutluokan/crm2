@@ -20,7 +20,7 @@ import {
 import { FiPlus, FiX } from 'react-icons/fi';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Ticket } from './types';
+import { Ticket, Tag } from './types';
 import { TicketAIAgent } from './TicketAIAgent';
 
 interface TicketInfoProps {
@@ -55,7 +55,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
       
       if (error) throw error;
       if (userData) {
-        const user = userData.find(u => u.id === customerId);
+        const user = userData.find((u: { id: string; email: string }) => u.id === customerId);
         if (user?.email) {
           setResolvedEmail(user.email);
         }
@@ -281,7 +281,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
                             }}
                           >
                             {availableTags
-                              .filter(tag => !ticket.tags?.some(t => t.id === tag.id))
+                              .filter(tag => !ticket.tags.some(t => t.id === tag.id))
                               .map(tag => (
                                 <option key={tag.id} value={tag.id}>
                                   {tag.name}
@@ -318,7 +318,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
                 </Popover>
               )}
             </HStack>
-            {ticket.tags?.length > 0 ? (
+            {ticket.tags.length > 0 ? (
               <VStack spacing={2} align="stretch">
                 {ticket.tags.map((tag) => (
                   <HStack key={tag.id}>
@@ -345,7 +345,7 @@ export function TicketInfo({ ticket, customerEmail, userRole, currentUserId, onU
                 ))}
               </VStack>
             ) : (
-              <Text fontSize="sm">No tags</Text>
+              <Text fontSize="sm" color="gray.500">No tags</Text>
             )}
           </Box>
 

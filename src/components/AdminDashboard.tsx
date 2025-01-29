@@ -6,8 +6,6 @@ import {
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { FiUsers, FiInbox, FiBarChart2, FiMessageSquare, FiCpu } from 'react-icons/fi'
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
 
 const sidebarItems = [
   { label: 'User Management', path: '/admin/users', icon: FiUsers },
@@ -18,23 +16,6 @@ const sidebarItems = [
 ]
 
 export function AdminDashboard() {
-  const [userId, setUserId] = useState('')
-
-  useEffect(() => {
-    getCurrentUser()
-  }, [])
-
-  async function getCurrentUser() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setUserId(user.id)
-      }
-    } catch (error) {
-      console.error('Error getting current user:', error)
-    }
-  }
-
   return (
     <Flex h="100vh" w="100vw" overflowY="auto" overflowX="hidden">
       <Sidebar items={sidebarItems} />

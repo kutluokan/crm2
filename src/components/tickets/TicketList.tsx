@@ -1,6 +1,6 @@
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FiChevronUp, FiChevronDown } from 'react-icons/fi'
+import { FiChevronUp, FiChevronDown, FiSearch } from 'react-icons/fi'
 import {
   Box,
   Table,
@@ -14,38 +14,29 @@ import {
   useToast,
   Select,
   Text,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalCloseButton,
-  ModalBody,
-  useDisclosure,
   HStack,
-  VStack,
-  FormControl,
-  FormLabel,
-  Checkbox,
   ButtonGroup,
   useColorModeValue,
   Input,
-  InputGroup,
-  InputLeftElement,
-  IconButton,
+  Checkbox,
   Popover,
   PopoverTrigger,
   PopoverContent,
   PopoverArrow,
   PopoverBody,
+  IconButton,
 } from '@chakra-ui/react'
 import { supabase } from '../../lib/supabase'
-import { TicketDetails } from './TicketDetails'
-import { RealtimeChannel } from '@supabase/supabase-js'
-import { FiSearch } from 'react-icons/fi'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 interface Tag {
   id: string;
   name: string;
   color: string;
+}
+
+interface TicketTag {
+  tag: Tag;
 }
 
 interface Ticket {
@@ -92,53 +83,42 @@ interface RawTicket {
   customer: {
     id: string;
     full_name: string | null;
+    email?: string;
   } | null;
   assignee: {
     id: string;
     full_name: string | null;
   } | null;
-  ticket_tags: Array<{
-    tag: Tag;
-  }>;
+  ticket_tags: TicketTag[];
 }
 
 export function TicketList({ userRole }: TicketListProps): JSX.Element {
   const navigate = useNavigate()
-  // Chakra hooks first
   const toast = useToast()
-  const { isOpen, onOpen, onClose } = useDisclosure()
   const textColor = useColorModeValue('gray.800', 'white')
   const theadBg = useColorModeValue('gray.50', 'gray.800')
   
-  // All useState hooks
+  // State management
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
-  const [staffFilterInput, setStaffFilterInput] = useState('')
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [sortField, setSortField] = useState<SortField>('created_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [filterCustomer, setFilterCustomer] = useState<string>('')
-  const [filterSupport, setFilterSupport] = useState<string>('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [customerSearch, setCustomerSearch] = useState('')
-  const [supportSearch, setSupportSearch] = useState('')
+  const [filterCustomer] = useState<string>('')
+  const [filterSupport] = useState<string>('')
+  const [searchQuery] = useState('')
   const [titleFilterInput, setTitleFilterInput] = useState('')
   const [filterTitle, setFilterTitle] = useState('')
-  // New state for ID, Status, Priority, and Tags
   const [idFilterInput, setIdFilterInput] = useState('')
   const [filterID, setFilterID] = useState('')
-  const [statusFilterInput, setStatusFilterInput] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  const [priorityFilterInput, setPriorityFilterInput] = useState('')
   const [filterPriority, setFilterPriority] = useState('')
   const [tagsFilterInput, setTagsFilterInput] = useState('')
   const [filterTags, setFilterTags] = useState('')
-  const [customers, setCustomers] = useState<Array<{ id: string; full_name: string }>>([])
   const [supportStaff, setSupportStaff] = useState<SupportStaff[]>([])
-  const [filteredCustomers, setFilteredCustomers] = useState<Array<{ id: string; full_name: string }>>([])
   const [filteredSupportStaff, setFilteredSupportStaff] = useState<SupportStaff[]>([])
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
+  const [supportSearch, setSupportSearch] = useState('')
 
   // Memoized values
   const filteredTickets = useMemo(() => {
@@ -204,19 +184,8 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   }, [userRole, sortField, sortOrder, filterCustomer])
 
   useEffect(() => {
-    if (customers.length > 0) {
-      const filtered = customers.filter(customer =>
-        (customer?.full_name || '').toLowerCase().includes(customerSearch.toLowerCase())
-      )
-      setFilteredCustomers(filtered)
-    } else {
-      setFilteredCustomers([])
-    }
-  }, [customerSearch, customers])
-
-  useEffect(() => {
     if (supportStaff.length > 0) {
-      const filtered = supportStaff.filter(staff =>
+      const filtered = supportStaff.filter((staff: SupportStaff) =>
         (staff?.full_name || '').toLowerCase().includes(supportSearch.toLowerCase())
       )
       setFilteredSupportStaff(filtered)
@@ -227,16 +196,7 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
 
   async function fetchUsers() {
     try {
-      // Fetch customers
-      const { data: customerData, error: customerError } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .eq('role', 'customer')
-        .order('full_name')
-
-      if (customerError) throw customerError
-
-      // Fetch support staff
+      // Fetch support staff only
       const { data: supportData, error: supportError } = await supabase
         .from('profiles')
         .select('id, full_name')
@@ -244,8 +204,6 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         .order('full_name')
 
       if (supportError) throw supportError
-
-      setCustomers(customerData?.filter(c => c && c.id && c.full_name) || [])
       setSupportStaff(supportData?.filter(s => s && s.id && s.full_name) || [])
     } catch (error) {
       console.error('Error fetching users:', error)
@@ -320,12 +278,18 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
   async function fetchTickets() {
     try {
       setLoading(true)
-      let query = supabase
+      const { data: ticketsData, error: fetchError } = await supabase
         .from('tickets')
         .select(`
           *,
-          customer:customer_id(id, full_name),
-          assignee:assigned_to(id, full_name),
+          customer:profiles!tickets_customer_id_fkey(
+            id,
+            full_name
+          ),
+          assignee:profiles!tickets_assigned_to_fkey(
+            id,
+            full_name
+          ),
           ticket_tags(
             tag:tags(
               id,
@@ -336,42 +300,41 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
         `)
         .order(sortField, { ascending: sortOrder === 'asc' })
 
+      if (fetchError) throw fetchError
 
-      const { data: tickets, error } = await query
+      if (ticketsData) {
+        const transformedTickets: Ticket[] = ticketsData.map((ticket: RawTicket) => ({
+          id: ticket.id,
+          title: ticket.title,
+          description: ticket.description,
+          status: ticket.status,
+          priority: ticket.priority,
+          created_at: ticket.created_at,
+          assigned_to: ticket.assigned_to || '',
+          customer: {
+            id: ticket.customer?.id || '',
+            email: 'N/A',
+            full_name: ticket.customer?.full_name || 'N/A'
+          },
+          assignee: ticket.assignee ? {
+            id: ticket.assignee.id,
+            full_name: ticket.assignee.full_name || 'N/A'
+          } : undefined,
+          tags: ticket.ticket_tags.map((tt: TicketTag) => tt.tag)
+        }))
 
-      if (error) throw error
-
-      const transformedTickets = (tickets as RawTicket[]).map(ticket => ({
-        id: ticket.id,
-        title: ticket.title,
-        description: ticket.description,
-        status: ticket.status,
-        priority: ticket.priority,
-        created_at: ticket.created_at,
-        assigned_to: ticket.assigned_to || '',
-        customer: {
-          id: ticket.customer?.id || '',
-          email: ticket.customer?.email || 'N/A',
-          full_name: ticket.customer?.full_name || 'N/A'
-        },
-        assignee: ticket.assignee ? {
-          id: ticket.assignee.id,
-          full_name: ticket.assignee.full_name || 'N/A'
-        } : undefined,
-        tags: ticket.ticket_tags?.map(tt => tt.tag) || []
-      })) as unknown as Ticket[]
-
-      setTickets(transformedTickets)
+        setTickets(transformedTickets)
+      }
+      
+      setLoading(false)
     } catch (error) {
       console.error('Error fetching tickets:', error)
       toast({
         title: 'Error fetching tickets',
-        description: error instanceof Error ? error.message : 'Unknown error',
         status: 'error',
-        duration: 5000,
+        duration: 3000,
         isClosable: true,
       })
-    } finally {
       setLoading(false)
     }
   }
@@ -830,11 +793,8 @@ export function TicketList({ userRole }: TicketListProps): JSX.Element {
                         <Input
                           size="xs"
                           placeholder="Type staff name..."
-                          value={staffFilterInput}
-                          onChange={(e) => {
-                            setStaffFilterInput(e.target.value)
-                            setFilterSupport(e.target.value.trim())
-                          }}
+                          value={supportSearch}
+                          onChange={(e) => setSupportSearch(e.target.value)}
                           width="120px"
                         />
                       </PopoverBody>

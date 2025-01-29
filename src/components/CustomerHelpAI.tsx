@@ -52,7 +52,7 @@ export function CustomerHelpAI() {
 
       if (error || !profile) {
         // Try to create profile if it doesn't exist
-        const { data: newProfile, error: createError } = await supabase.rpc(
+        const { error: createError } = await supabase.rpc(
           'create_profile_if_not_exists',
           { user_id: user.id, user_role: 'customer' }
         );

@@ -33,6 +33,7 @@ interface Ticket {
   status: string;
   priority: string;
   created_at: string;
+  updated_at: string;
   customer: {
     id: string;
     full_name: string;

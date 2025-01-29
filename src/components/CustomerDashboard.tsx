@@ -1,7 +1,6 @@
 import {
   Box,
   Heading,
-  Text,
   Flex,
   Button,
   HStack,
@@ -15,9 +14,8 @@ import {
 } from '@chakra-ui/react'
 import { Sidebar } from './Sidebar'
 import { FiHelpCircle, FiList, FiPlus } from 'react-icons/fi'
-import { TicketList } from './tickets/TicketList'
 import { CreateTicket } from './tickets/CreateTicket'
-import { useLocation, Navigate, Outlet } from 'react-router-dom'
+import { useLocation, Outlet } from 'react-router-dom'
 import { CustomerHelpAI } from './CustomerHelpAI'
 
 const sidebarItems = [
