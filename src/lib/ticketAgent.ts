@@ -384,30 +384,12 @@ Remember to handle errors gracefully and provide clear feedback to the user.`;
   return {
     async processQuery(query: string) {
       try {
-        const result = await executor.invoke({ 
-          input: query,
-          tags: ["ticket_query"],
-          metadata: {
-            queryType: "ticket_management",
-            timestamp: new Date().toISOString(),
-          },
-          runName: "Ticket Management Query",
+        const { data, error } = await supabase.functions.invoke('ticket-agent', {
+          body: { query }
         });
 
-        // Try to parse and format the response if it's JSON
-        try {
-          const parsed = JSON.parse(result.output);
-          if (parsed.tickets) {
-            return `Found ${parsed.count} open ticket(s):\n${parsed.tickets.map((t: any) => 
-              `- Ticket #${t.id}: ${t.title} (${t.status}, ${t.priority}) - Customer: ${t.customer}`
-            ).join('\n')}`;
-          }
-          return `Ticket Details:\n${Object.entries(parsed).map(([k, v]) => 
-            `${k}: ${Array.isArray(v) ? v.join(', ') : v}`
-          ).join('\n')}`;
-        } catch {
-          return result.output;
-        }
+        if (error) throw error;
+        return data.result;
       } catch (error) {
         console.error('Error processing query:', error);
         throw error;
