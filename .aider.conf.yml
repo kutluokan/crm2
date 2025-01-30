@@ -2,7 +2,6 @@ auto-commits: false
 yes-always: true
 stream: false
 detect-urls: false
-multiline: true
 
 extra_body:
  reasoning_effort: high
