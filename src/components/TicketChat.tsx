@@ -64,7 +64,7 @@ interface DatabaseFile {
   filename: string;
   ticket_id: string;
   created_at: string;
-  user_id: string;
+  updated_at: string;
 }
 
 interface File extends DatabaseFile {}
@@ -210,13 +210,13 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
   const fetchFiles = async () => {
     try {
       const { data, error } = await supabase
-        .from('files')
+        .from('documents')
         .select(`
           id,
           filename,
           ticket_id,
           created_at,
-          user_id
+          updated_at
         `)
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false });
@@ -228,7 +228,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
         filename: file.filename,
         ticket_id: file.ticket_id,
         created_at: file.created_at,
-        user_id: file.user_id
+        updated_at: file.updated_at
       })));
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -442,7 +442,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
       if (!ticket || ticket.customer_id !== userId) {
         toast({
           title: 'Permission Denied',
-          description: 'You can only delete your own files',
+          description: 'You can only delete files in your own tickets',
           status: 'error',
           duration: 3000,
           isClosable: true,
@@ -694,8 +694,7 @@ export default function TicketChat({ ticketId, currentUserId, isSupport }: Ticke
                         }}
                         isDisabled={
                           userRole !== 'admin' &&
-                          userRole !== 'support' &&
-                          userId !== file.user_id
+                          userRole !== 'support'
                         }
                       >
                         Delete File
