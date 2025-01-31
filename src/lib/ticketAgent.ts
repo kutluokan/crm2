@@ -13,6 +13,7 @@ globalThis.process = {
     LANGCHAIN_TRACING_V2: "true",
     LANGCHAIN_API_KEY: import.meta.env.VITE_LANGCHAIN_API_KEY,
     LANGCHAIN_PROJECT: import.meta.env.VITE_LANGCHAIN_PROJECT,
+    OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
   },
 } as any;
 
@@ -239,6 +240,7 @@ class SuggestResponseTool extends StructuredTool {
       const model = new ChatOpenAI({
         modelName: 'gpt-4o-mini',
         temperature: 0.7,
+        openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
       });
 
       const response = await model.invoke([
@@ -293,13 +295,24 @@ class SendResponseTool extends StructuredTool {
         throw new Error(`Ticket ${ticketId} not found`);
       }
 
+      // Get Sarah Support's ID
+      const { data: supportUser, error: supportUserError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('full_name', 'Sarah Support')
+        .single();
+
+      if (supportUserError || !supportUser) {
+        throw new Error('Support user not found');
+      }
+
       const { error } = await supabase
         .from('ticket_messages')
         .insert({
           ticket_id: ticketId,
-          content: message,
-          sender_type: 'agent',
-          sender_id: 'ai_assistant'
+          message: message,
+          user_id: supportUser.id,
+          is_internal: false
         });
       
       if (error) throw error;
@@ -326,7 +339,7 @@ const tools = [
 const model = new ChatOpenAI({
   modelName: 'gpt-4o-mini',
   temperature: 0,
-  openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  openAIApiKey: import.meta.env.VITE_OPENAI_API_KEY,
 });
 
 export async function createTicketAgent(userRole: 'admin' | 'support') {
